@@ -241,6 +241,15 @@ function openWeekPicker() {
   $("week-dialog").showModal();
 }
 
+// 시각 칸의 너비는 고른 날짜·시각 모양에 따라 달라진다. 줄마다 따로 잡힌 너비 가운데 가장 넓은 것으로 모든 줄을 맞춘다
+function fitTimeColumn() {
+  const box = $("session-list");
+  box.style.removeProperty("--s-time");
+  let widest = 0;
+  for (const cell of box.querySelectorAll(".s-time")) widest = Math.max(widest, cell.getBoundingClientRect().width);
+  if (widest > 0) box.style.setProperty("--s-time", `${Math.ceil(widest)}px`);
+}
+
 async function loadHistory() {
   const now = Date.now();
   weekOffset = Math.min(weekOffset, maxWeekOffset(now, earliestMs));
@@ -273,6 +282,7 @@ async function loadHistory() {
   const list = sessions.slice().sort((x, y) => span(y, now)[0] - span(x, now)[0] || y.id - x.id);
   $("session-list").replaceChildren(...(list.length ? list.map((s) => sessionRow(s, marks, now))
     : [el("p", { class: "empty", text: "이 기간에는 녹화 기록이 없습니다." })]));
+  fitTimeColumn();
 }
 
 function bindHistoryCommon() {

@@ -230,6 +230,7 @@ async function loadJobs() {
   const data = await act(() => api("GET", `/api/replay/jobs?status=${jobFilter}`));
   if (!data) return;
   for (const span of document.querySelectorAll("[data-count]")) span.textContent = `(${data.counts[span.dataset.count] || 0})`;
+  $("jobs-cancel-all").disabled = !data.counts.active; // 취소할 대기·진행 작업이 없으면 누를 수 없다
   $("jobs-body").replaceChildren(...(data.jobs.length ? data.jobs.map(jobRow)
     : [el("tr", {}, el("td", { colspan: "5", class: "muted", text: "작업이 없습니다." }))]));
   if (openLog) showLog(data.jobs.find((j) => j.id === openLog) || null, true);

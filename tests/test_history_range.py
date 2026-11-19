@@ -101,3 +101,14 @@ def test_history_screen_has_picker_between_prev_and_next():
         assert needed in html, needed
     js = (UI / "views" / "history.js").read_text()
     assert '$("tl-prev").disabled = weekOffset >= maxWeekOffset(now, earliestMs);' in js
+
+
+def test_time_column_fits_the_chosen_date_shape():
+    """녹화 목록의 시각 칸은 고정 너비가 아니라 가장 넓은 줄에 맞춘다(긴 날짜·시각 모양에서 채널 이름과 겹치지 않게)."""
+    css = (UI / "style.css").read_text()
+    js = (UI / "views" / "history.js").read_text()
+    assert "grid-template-columns: var(--s-time, max-content) minmax(0, 1fr)" in css
+    assert 'box.style.setProperty("--s-time"' in js and "fitTimeColumn();" in js
+    assert ".section-head h2, .section-head .seg { margin-top: 0; margin-bottom: 0; }" in css
+    downloads = (UI.parent / "ext" / "downloads" / "static" / "downloads.js").read_text()
+    assert '$("jobs-cancel-all").disabled = !data.counts.active;' in downloads
