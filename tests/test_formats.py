@@ -208,7 +208,7 @@ def test_no_other_date_formatting_in_screen_code():
     axis = js[js.index("function kstParts("):js.index("\n}\n", js.index("function kstParts("))]
     rest = js.replace(body, "").replace(axis, "")
     assert not re.search(r"getUTC(Hours|Minutes|Seconds|Month|Date|Day|FullYear)\(", rest)
-    assert js.count("kstParts(") == 2  # 정의와 타임라인 줄의 날짜 눈금 하나
+    assert js.count("kstParts(") == 3  # 정의, 짧은 날짜 눈금(dayLabel), 주 선택의 연·월(rowDate. 글자를 만들지 않는다)
     for name in ("localTime(", "localDate(", "toISOString().slice"):
         assert name not in js, name
     for other in ("login.js", "setup.js", "boot.js"):

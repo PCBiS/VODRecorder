@@ -68,6 +68,7 @@
       <span id="tl-label" class="muted"></span>
       <div class="row">
         <button id="tl-prev" class="btn small" type="button">이전 주</button>
+        <button id="tl-pick" class="btn small" type="button" aria-haspopup="dialog">선택</button>
         <button id="tl-next" class="btn small" type="button">다음 주</button>
       </div>
     </div>
@@ -354,6 +355,18 @@
       <button class="btn primary" type="submit">저장</button>
     </div>
   </form>
+</dialog>
+<dialog id="week-dialog" aria-labelledby="week-dialog-title">
+  <h2 id="week-dialog-title">볼 주 선택</h2>
+  <div class="grid">
+    <label>연도<select id="week-year"></select></label>
+    <label>월<select id="week-month"></select></label>
+  </div>
+  <div id="week-list" class="week-list" role="group" aria-label="주차"></div>
+  <p id="week-note" class="muted field-note"></p>
+  <div class="row end">
+    <button class="btn" type="button" id="week-cancel">닫기</button>
+  </div>
 </dialog>
 <script src="/static/app.js"></script>
 </body>

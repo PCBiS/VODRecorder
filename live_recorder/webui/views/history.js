@@ -9,6 +9,7 @@ const KST_MS = 9 * 3600000;
 const NOON_MS = 12 * 3600000;
 const TIMELINE_DAYS = 7;
 let weekOffset = 0; // 0이면 이번 주(오늘 줄까지). 1이면 그 앞 7일
+let earliestMs = null; // 기록이 있을 수 있는 가장 이른 시각(서버가 준다). 모르면 null
 const openRows = new Set();
 
 // 한 줄은 KST 정오부터 다음 날 정오까지다. 줄의 시작 시각(UTC 밀리초)
@@ -18,7 +19,13 @@ function rowStartOf(ms) {
 
 function kstParts(ms) {
   const d = new Date(ms + KST_MS);
-  return { m: d.getUTCMonth() + 1, d: d.getUTCDate(), w: "일월화수목금토"[d.getUTCDay()], h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds() };
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), w: "일월화수목금토"[d.getUTCDay()], h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds() };
+}
+
+// 타임라인 줄과 주 선택 목록의 짧은 날짜 눈금
+function dayLabel(ms) {
+  const p = kstParts(ms);
+  return `${p.m}/${p.d} (${p.w})`;
 }
 
 function kstLabel(ms, withSeconds) {
@@ -116,8 +123,7 @@ function timelineFor(name, sessions, rows, marks, now) {
       bar.style.width = `${(Math.max(0, hi - lo) / DAY_MS) * 100}%`;
       track.append(bar);
     }
-    const p = kstParts(start);
-    const day = el("span", { class: "tl-day", text: `${p.m}/${p.d} (${p.w})` });
+    const day = el("span", { class: "tl-day", text: dayLabel(start) });
     const totalCell = el("span", { class: "tl-total", text: total ? hms(total / 1000) : "방송 없음" });
     if (!total) totalCell.classList.add("muted");
     block.append(el("div", { class: "tl-row" }, day, track, totalCell));
@@ -159,9 +165,86 @@ function sessionRow(s, marks, now) {
   return row;
 }
 
+// ---- 주 이동 한계와 주 선택 ----
+const WEEK_MS = TIMELINE_DAYS * DAY_MS;
+
+// 가장 오래된 주의 번호. 그 주의 7줄 안에 설치한 날의 줄이 있다. 설치 시각을 모르면 이번 주만
+function maxWeekOffset(now, earliest) {
+  if (earliest == null || !Number.isFinite(earliest)) return 0;
+  return Math.max(0, Math.floor((rowStartOf(now) - rowStartOf(earliest)) / WEEK_MS));
+}
+
+// 줄의 날짜(KST). 줄은 정오에 시작하므로 시작 시각의 날짜가 그 줄의 날짜다
+function rowDate(start) {
+  const { y, m } = kstParts(start);
+  return { y, m };
+}
+
+// 그 달에 하루라도 걸친 주를 오래된 것부터. disabled는 설치 전이라 고를 수 없는 주다
+function weeksOfMonth(year, month, now, earliest) {
+  const newestRow = rowStartOf(now);
+  const max = maxWeekOffset(now, earliest);
+  const monthStart = Date.UTC(year, month - 1, 1) - KST_MS + NOON_MS; // 1일 줄의 시작
+  const monthEnd = Date.UTC(year, month, 1) - KST_MS + NOON_MS; // 다음 달 1일 줄의 시작
+  // 주(마지막 줄 last, 첫 줄 last-6일)가 달과 겹치려면 last >= 1일 줄, 첫 줄 <= 말일 줄. 줄 수로 센다
+  const daysToMonthEnd = Math.round((newestRow - (monthEnd - DAY_MS)) / DAY_MS);
+  const lo = Math.max(0, Math.ceil((daysToMonthEnd - (TIMELINE_DAYS - 1)) / TIMELINE_DAYS));
+  const hi = Math.floor(Math.round((newestRow - monthStart) / DAY_MS) / TIMELINE_DAYS);
+  const out = [];
+  for (let offset = hi; offset >= lo; offset -= 1) {
+    const last = newestRow - offset * WEEK_MS;
+    out.push({ offset, from: last - (TIMELINE_DAYS - 1) * DAY_MS, to: last, disabled: offset > max });
+  }
+  return out;
+}
+
+function renderWeekList() {
+  const now = Date.now();
+  const year = Number($("week-year").value);
+  const month = Number($("week-month").value);
+  const weeks = weeksOfMonth(year, month, now, earliestMs);
+  $("week-list").replaceChildren(...weeks.map((w, i) => {
+    const b = el("button", { class: "btn week-item", type: "button", text: `${i + 1}주차 · ${dayLabel(w.from)} – ${dayLabel(w.to)}`,
+      onclick: () => { weekOffset = w.offset; $("week-dialog").close(); loadHistory(); } });
+    if (w.disabled) { b.disabled = true; b.title = "설치 전이라 기록이 없습니다."; }
+    if (w.offset === weekOffset) b.setAttribute("aria-current", "true");
+    return b;
+  }));
+  $("week-note").textContent = earliestMs == null ? "" : `${formatWhen(earliestMs, { time: false })}부터의 기록을 볼 수 있습니다.`;
+}
+
+// 고를 수 있는 달만 낸다. 첫 달은 설치한 날의 줄이 든 달, 끝 달은 오늘 줄의 달이다
+function fillWeekMonths(keep) {
+  const now = Date.now();
+  const first = rowDate(earliestMs == null ? rowStartOf(now) : rowStartOf(earliestMs));
+  const last = rowDate(rowStartOf(now));
+  const year = Number($("week-year").value);
+  const lo = year === first.y ? first.m : 1;
+  const hi = year === last.y ? last.m : 12;
+  const months = [];
+  for (let m = lo; m <= hi; m += 1) months.push(el("option", { value: String(m), text: `${m}월` }));
+  $("week-month").replaceChildren(...months);
+  $("week-month").value = String(Math.min(hi, Math.max(lo, keep || hi)));
+  renderWeekList();
+}
+
+function openWeekPicker() {
+  const now = Date.now();
+  const first = rowDate(earliestMs == null ? rowStartOf(now) : rowStartOf(earliestMs));
+  const last = rowDate(rowStartOf(now));
+  const shown = rowDate(rowStartOf(now) - weekOffset * WEEK_MS); // 지금 보는 주의 마지막 줄
+  const years = [];
+  for (let y = last.y; y >= first.y; y -= 1) years.push(el("option", { value: String(y), text: `${y}년` }));
+  $("week-year").replaceChildren(...years);
+  $("week-year").value = String(shown.y);
+  fillWeekMonths(shown.m);
+  $("week-dialog").showModal();
+}
+
 async function loadHistory() {
   const now = Date.now();
-  const newest = rowStartOf(now) - weekOffset * TIMELINE_DAYS * DAY_MS;
+  weekOffset = Math.min(weekOffset, maxWeekOffset(now, earliestMs));
+  const newest = rowStartOf(now) - weekOffset * WEEK_MS;
   const rows = Array.from({ length: TIMELINE_DAYS }, (_, i) => newest - i * DAY_MS); // 최근 날이 위
   const from = rows[rows.length - 1];
   const to = newest + DAY_MS;
@@ -173,9 +256,13 @@ async function loadHistory() {
     data = await api("GET", (viewOnly ? "/api/view/sessions?" : "/api/sessions?") + query);
   } catch (e) { toast(e.message, true); return; }
   showDisk(data.disk);
+  const earliest = Date.parse(data.earliest);
+  earliestMs = Number.isFinite(earliest) ? earliest : null;
+  if (weekOffset > maxWeekOffset(now, earliestMs)) { weekOffset = maxWeekOffset(now, earliestMs); return loadHistory(); }
   const sessions = data.sessions.filter((s) => { const [a, b] = span(s, now); return b >= from && a < to; });
   const marks = pairMarks(data.sessions, now);
   $("tl-label").textContent = `${formatWhen(from, { time: false })} – ${formatWhen(newest, { time: false })}`;
+  $("tl-prev").disabled = weekOffset >= maxWeekOffset(now, earliestMs); // 설치 전 주로는 가지 않는다
   $("tl-next").disabled = weekOffset === 0;
   // 채널마다 타임라인 하나. 등록 순서(ch)대로, 지운 채널의 기록은 끝에
   const names = new Map(channels.map((c, i) => [i + 1, c.name]));
@@ -189,7 +276,11 @@ async function loadHistory() {
 }
 
 function bindHistoryCommon() {
-  $("tl-prev").addEventListener("click", () => { weekOffset += 1; loadHistory(); });
+  $("tl-prev").addEventListener("click", () => { if (weekOffset < maxWeekOffset(Date.now(), earliestMs)) { weekOffset += 1; loadHistory(); } });
+  $("tl-pick").addEventListener("click", openWeekPicker);
+  $("week-year").addEventListener("change", () => fillWeekMonths());
+  $("week-month").addEventListener("change", renderWeekList);
+  $("week-cancel").addEventListener("click", () => $("week-dialog").close());
   $("tl-next").addEventListener("click", () => { if (weekOffset > 0) { weekOffset -= 1; loadHistory(); } });
 }
 

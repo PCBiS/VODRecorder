@@ -570,3 +570,8 @@ dialog::backdrop { background: var(--backdrop); -webkit-backdrop-filter: blur(4p
 .theme-btn[data-state="auto"] .theme-icon[data-icon="auto"],
 .theme-btn[data-state="light"] .theme-icon[data-icon="light"],
 .theme-btn[data-state="dark"] .theme-icon[data-icon="dark"] { display: block; }
+
+/* 기록 화면의 주 선택 창 */
+.week-list { display: grid; gap: .45rem; margin: 1rem 0 .8rem; }
+.week-list .week-item { width: 100%; text-align: left; font-variant-numeric: tabular-nums; }
+.week-list .week-item[aria-current="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }

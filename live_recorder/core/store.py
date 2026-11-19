@@ -164,6 +164,19 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def _earlier(candidate: str | None, fallback: str) -> str:
+    """두 ISO 시각 중 앞선 것. candidate가 비었거나 읽을 수 없으면 fallback."""
+    try:
+        when = datetime.fromisoformat(candidate) if candidate else None
+    except ValueError:
+        when = None
+    if when is None:
+        return fallback
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return min(when.astimezone(timezone.utc), datetime.fromisoformat(fallback)).isoformat(timespec="milliseconds")
+
+
 @dataclass(frozen=True)
 class Channel:
     channel_id: str
@@ -250,6 +263,7 @@ class Store:
             self._db.executescript(SCHEMA)
             if self._version() is None:
                 self._db.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+            self._ensure_installed_at()
         except sqlite3.DatabaseError as e:
             # 열리지 않으면 멈춘다. 빈 상태로 조용히 뜨지 않는다.
             raise StoreCorrupt(f"저장소를 열 수 없습니다: {self.path}: {e}") from e
@@ -259,6 +273,14 @@ class Store:
             pass
         self._pattern_warned: str | None = None
         self.filename_pattern_problem()  # 뜰 때 저장된 패턴을 쓸 수 없으면 경고를 남긴다
+
+    def _ensure_installed_at(self) -> None:
+        """처음 설치한 시각을 한 번만 적는다. 이 값이 없던 저장소는 가장 이른 채널 등록·녹화 시작 시각으로 채운다."""
+        if self._db.execute("SELECT 1 FROM meta WHERE key='installed_at'").fetchone():
+            return
+        row = self._db.execute("SELECT MIN(t) FROM (SELECT MIN(created_at) AS t FROM channels"
+                               " UNION ALL SELECT MIN(started_at) FROM sessions)").fetchone()
+        self._db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('installed_at', ?)", (_earlier(row[0], now_iso()),))
 
     def _version(self) -> int | None:
         has_meta = self._db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'").fetchone()
@@ -683,6 +705,11 @@ class Store:
                + (" AND channel_id=?" if channel_id else "") + " ORDER BY started_at, id")
         args: tuple = (end_iso, start_iso, channel_id) if channel_id else (end_iso, start_iso)
         return [dict(r) for r in self._all(sql, args)]
+
+    def history_start(self) -> str:
+        """기록이 있을 수 있는 가장 이른 시각(UTC ISO): 설치 시각과 가장 이른 녹화 시작 중 앞선 것."""
+        row = self._one("SELECT (SELECT value FROM meta WHERE key='installed_at'), (SELECT MIN(started_at) FROM sessions)")
+        return _earlier(row[1], _earlier(row[0], now_iso()))
 
     def known_final_paths(self) -> set[str]:
         return {r[0] for r in self._all("SELECT final_path FROM sessions WHERE final_path IS NOT NULL")}

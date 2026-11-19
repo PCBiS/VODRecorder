@@ -68,10 +68,12 @@ def build(ctx: "WebContext") -> APIRouter:
             view_item = {k: item[k] for k in VIEW_SESSION_KEYS}
             view_item["group"] = groups.setdefault(g, len(groups) + 1) if g else None
             out.append(view_item)
-        return {"sessions": out, "disk": await ctx.disk_info()}
+        return {"sessions": out, "disk": await ctx.disk_info(), "earliest": await ctx.db(engine.store.history_start)}
 
     @r.get("/api/sessions")
     async def session_list(limit: int = 30, start: str | None = None, end: str | None = None):
-        return {"sessions": await session_rows(start, end, limit), "disk": await ctx.disk_info()}
+        # earliest: 이보다 앞선 주에는 기록이 있을 수 없다(설치 시각과 가장 이른 녹화 중 앞선 것)
+        return {"sessions": await session_rows(start, end, limit), "disk": await ctx.disk_info(),
+                "earliest": await ctx.db(engine.store.history_start)}
 
     return r
