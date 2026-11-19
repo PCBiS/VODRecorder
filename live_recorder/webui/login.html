@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PROGRAM_NAME}} 로그인</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/theme.js"></script>
+<script src="/static/boot.js"></script>
+</head>
+<body class="login-body">
+<main class="login-card">
+  <div class="brand"><span class="brand-dot"></span>{{PROGRAM_NAME}}</div>
+  <form id="login-form" autocomplete="on" data-boot-hide>
+    <label>사용자 이름<input id="username" name="username" autocomplete="username" required autofocus></label>
+    <label>비밀번호<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+    <p id="login-error" class="form-error" role="alert" hidden></p>
+    <button class="btn primary wide" type="submit">로그인</button>
+  </form>
+  <section id="boot-failed" class="boot-failed" role="alert" hidden>
+    <p>화면을 불러오지 못했습니다. 새로고침(Ctrl+Shift+R)하십시오.</p>
+    <button id="boot-retry" class="btn primary" type="button">다시 불러오기</button>
+  </section>
+  <p id="forgot-hint" class="hint" hidden>비밀번호를 잊었으면 서버에서 <code>python -m live_recorder account passwd</code>로 바꾸십시오.</p>
+</main>
+<script src="/static/login.js"></script>
+</body>
+</html>

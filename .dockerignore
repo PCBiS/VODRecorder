@@ -1,0 +1,12 @@
+# 저장소 기록과 CI 설정은 이미지에 넣지 않는다
+.git
+.github
+**/__pycache__
+**/*.pyc
+.pytest_cache
+tests
+docs
+*.md
+# 이미지 안의 라이선스 고지(/usr/share/licenses/vodrecorder/)에 쓰는 문서 하나는 통과시킨다. LICENSE는 위 규칙에 걸리지 않는다
+!docs/THIRD-PARTY.md
+compose.*.yaml

@@ -1,0 +1,31 @@
+  <section id="view-replay" class="view" data-boot-hide hidden>
+    <div class="section-head"><h1 id="replay-title">다시보기·클립</h1><span id="replay-state" class="muted"></span>
+      <button class="btn small" id="replay-pause-all" type="button" aria-pressed="false">전체 일시정지</button></div>
+    <p id="replay-admission" class="banner inline" role="status" hidden></p>
+    <!-- lr-slot:downloads-modes -->
+    <div id="replay-url-pane" hidden>
+    <form id="analyze-form" class="panel" autocomplete="off">
+      <label><span id="analyze-label">주소(한 줄에 하나, 10개까지)</span>
+        <textarea name="urls" rows="3" spellcheck="false" placeholder=""></textarea></label>
+      <div class="row"><button class="btn primary" type="submit">분석</button><span id="analyze-result" class="muted"></span></div>
+    </form>
+    <div id="analysis" class="cards"></div>
+    <div class="row end" id="enqueue-row" hidden><button class="btn primary" id="enqueue">선택한 영상 받기</button></div>
+    </div>
+    <div class="section-head"><h2>작업</h2>
+      <div class="row">
+        <div class="seg" id="job-filters" role="tablist" aria-label="작업 상태">
+          <button class="seg-btn" type="button" data-filter="attention" aria-selected="true">확인 필요 <span data-count="attention"></span></button>
+          <button class="seg-btn" type="button" data-filter="active" aria-selected="false">진행 <span data-count="active"></span></button>
+          <button class="seg-btn" type="button" data-filter="failed" aria-selected="false">실패 <span data-count="failed"></span></button>
+          <button class="seg-btn" type="button" data-filter="completed" aria-selected="false">완료 <span data-count="completed"></span></button>
+        </div>
+        <button class="btn small danger" id="jobs-cancel-all" type="button">대기·진행 전체 취소</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>영상</th><th>화질·구간</th><th>상태</th><th>진행</th><th></th></tr></thead>
+      <tbody id="jobs-body"></tbody>
+    </table></div>
+    <div id="job-log" class="panel log" hidden></div>
+  </section>

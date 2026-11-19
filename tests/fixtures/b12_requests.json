@@ -1,0 +1,420 @@
+{
+ "live": {
+  "cookie_check": [
+   {
+    "cookie_names": [
+     "NID_AUT",
+     "NID_SES"
+    ],
+    "fixed": {
+     "accept": "application/json, text/plain, */*",
+     "cache-control": "no-cache",
+     "origin": "https://chzzk.naver.com",
+     "pragma": "no-cache",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "cache-control",
+     "connection",
+     "cookie",
+     "host",
+     "origin",
+     "pragma",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/api/user-status",
+    "query_keys": [
+     "_"
+    ]
+   }
+  ],
+  "live_detail": [
+   {
+    "cookie_names": [
+     "NID_AUT",
+     "NID_SES"
+    ],
+    "fixed": {
+     "accept": "application/json, text/plain, */*",
+     "cache-control": "no-cache",
+     "origin": "https://chzzk.naver.com",
+     "pragma": "no-cache",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "cache-control",
+     "connection",
+     "cookie",
+     "host",
+     "origin",
+     "pragma",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/api/service/v3/channels/<channel>/live-detail",
+    "query_keys": [
+     "_"
+    ]
+   }
+  ],
+  "stream_master": [
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/live/master.m3u8",
+    "query_keys": [
+     "hdnts"
+    ]
+   }
+  ],
+  "stream_media": [
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/live/v1080/media.m3u8",
+    "query_keys": []
+   }
+  ],
+  "stream_segment": [
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/live/v1080/init.mp4",
+    "query_keys": []
+   },
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/live/v1080/seg<n>.m4s",
+    "query_keys": []
+   }
+  ]
+ },
+ "thumbnail": [
+  [
+   "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/1/live/2/record/3/thumbnail/image_{type}.jpg",
+   "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/1/live/2/record/3/thumbnail/image_480.jpg"
+  ],
+  [
+   "https://x.akamaized.net/a.jpg",
+   "https://x.akamaized.net/a.jpg"
+  ],
+  [
+   "https://nng-phinf.pstatic.net/b.jpg",
+   "https://nng-phinf.pstatic.net/b.jpg"
+  ],
+  [
+   "http://x.akamaized.net/a.jpg",
+   null
+  ],
+  [
+   "https://evil.example/a.jpg",
+   null
+  ],
+  [
+   "https://x.akamaized.net/{size}/a.jpg",
+   null
+  ],
+  [
+   "",
+   null
+  ],
+  [
+   null,
+   null
+  ]
+ ],
+ "timemachine": {
+  "cookie_check": [
+   {
+    "cookie_names": [
+     "NID_AUT",
+     "NID_SES"
+    ],
+    "fixed": {
+     "accept": "application/json, text/plain, */*",
+     "cache-control": "no-cache",
+     "origin": "https://chzzk.naver.com",
+     "pragma": "no-cache",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "cache-control",
+     "connection",
+     "cookie",
+     "host",
+     "origin",
+     "pragma",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/api/user-status",
+    "query_keys": [
+     "_"
+    ]
+   }
+  ],
+  "live_detail": [
+   {
+    "cookie_names": [
+     "NID_AUT",
+     "NID_SES"
+    ],
+    "fixed": {
+     "accept": "application/json, text/plain, */*",
+     "cache-control": "no-cache",
+     "origin": "https://chzzk.naver.com",
+     "pragma": "no-cache",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "cache-control",
+     "connection",
+     "cookie",
+     "host",
+     "origin",
+     "pragma",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/api/service/v3/channels/<channel>/live-detail",
+    "query_keys": [
+     "_"
+    ]
+   }
+  ],
+  "stream_master": [
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/tm/master.m3u8",
+    "query_keys": [
+     "hdnts"
+    ]
+   }
+  ],
+  "stream_media": [
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/tm/v1080/media.m3u8",
+    "query_keys": []
+   }
+  ],
+  "stream_segment": [
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/tm/v1080/init.mp4",
+    "query_keys": []
+   },
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/tm/v1080/seg<n>.m4s",
+    "query_keys": []
+   },
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/tm/v1080/seg<n>.m4s",
+    "query_keys": [
+     "__bgda__"
+    ]
+   },
+   {
+    "cookie_names": [],
+    "fixed": {
+     "accept": "*/*",
+     "origin": "https://chzzk.naver.com",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "connection",
+     "host",
+     "origin",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/hls/<token>/tm/v1080/init.mp4",
+    "query_keys": [
+     "__bgda__"
+    ]
+   }
+  ],
+  "time_machine": [
+   {
+    "cookie_names": [
+     "NID_AUT",
+     "NID_SES"
+    ],
+    "fixed": {
+     "accept": "application/json, text/plain, */*",
+     "cache-control": "no-cache",
+     "origin": "https://chzzk.naver.com",
+     "pragma": "no-cache",
+     "referer": "https://chzzk.naver.com/",
+     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    },
+    "header_names": [
+     "accept",
+     "accept-encoding",
+     "cache-control",
+     "connection",
+     "cookie",
+     "host",
+     "origin",
+     "pragma",
+     "referer",
+     "user-agent"
+    ],
+    "path": "/api/service/v1/live/<live>/playback/time-machine",
+    "query_keys": [
+     "_"
+    ]
+   }
+  ]
+ }
+}

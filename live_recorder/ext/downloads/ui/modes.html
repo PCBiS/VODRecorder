@@ -1,0 +1,49 @@
+    <div class="seg" id="replay-modes" role="tablist" aria-label="받는 방식" hidden>
+      <button class="seg-btn" id="replay-mode-list" type="button" role="tab" aria-selected="true">채널 목록</button>
+      <button class="seg-btn" id="replay-mode-url" type="button" role="tab" aria-selected="false">주소로 받기</button>
+    </div>
+    <div id="replay-list-pane" hidden>
+      <div class="panel">
+        <div class="row vl-channel-row">
+          <label class="inline">채널<select id="vl-channel"></select></label>
+          <button class="btn small danger" id="vl-remove" type="button">채널 지우기</button>
+          <form id="vl-add-form" class="vl-add" autocomplete="off">
+            <select id="vl-add-platform" aria-label="추가할 채널의 플랫폼" hidden></select>
+            <input id="vl-add-input" name="channel" type="text" spellcheck="false" aria-label="추가할 채널 주소나 ID" placeholder="채널 주소">
+            <button class="btn small" type="submit">채널 추가</button>
+          </form>
+        </div>
+        <p id="vl-add-note" class="muted field-note" hidden></p>
+        <div class="row vl-filter-row">
+          <label class="inline">종류<select id="vl-type">
+            <option value="">전체</option><option value="replay">다시보기</option><option value="upload">일반 업로드</option>
+          </select></label>
+          <label class="inline">제목 검색<input id="vl-search" type="search" spellcheck="false" autocomplete="off" placeholder="수집한 목록 전체에서"></label>
+        </div>
+        <div class="row collect-row">
+          <span id="vl-collect" class="muted" role="status" aria-live="polite"></span>
+          <span class="grow"></span>
+          <button class="btn small" id="vl-latest" type="button">새 영상 확인</button>
+          <button class="btn small" id="vl-full" type="button">전체 다시 수집</button>
+          <button class="btn small danger" id="vl-collect-cancel" type="button" hidden>수집 취소</button>
+        </div>
+        <p id="vl-collect-error" class="card-error collect-error" role="status" hidden></p>
+        <div id="vl-months" class="month-nav" aria-label="게시 월 이동" hidden>
+          <button class="btn small" id="vl-month-prev" type="button" aria-label="이전 달">‹ 이전 달</button>
+          <strong id="vl-month-label" aria-live="polite"></strong>
+          <button class="btn small" id="vl-month-next" type="button" aria-label="다음 달">다음 달 ›</button>
+          <div id="vl-month-chips" class="month-chips"></div>
+        </div>
+        <p id="vl-search-note" class="muted search-note" hidden></p>
+        <div class="row">
+          <span class="grow"></span>
+          <span id="vl-selected" class="muted"></span>
+          <button class="btn small" id="vl-clear" type="button">선택 해제</button>
+          <button class="btn primary" id="vl-download" type="button">선택 다운로드</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th class="check-col"><input type="checkbox" id="vl-all" aria-label="보이는 줄 모두 선택"></th><th>영상</th><th>게시 날짜</th><th>길이</th><th>종류</th><th>상태</th><th></th></tr></thead>
+        <tbody id="vl-body"></tbody>
+      </table></div>
+    </div>

@@ -1,0 +1,39 @@
+# 설치 꾸러미 정의. 의존 묶음의 판은 requirements.txt와 같게 고정한다(시험이 견준다).
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vod-recorder"
+version = "0.1.0"
+description = "치지직·유튜브·씨미 실시간 녹화와 다시보기·영상 받기 도구"
+readme = "docs/INSTALL.md"
+requires-python = ">=3.13"
+license = "Unlicense"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.15",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+dependencies = [
+    "httpx==0.28.1",
+    "fastapi==0.162.4",
+    "uvicorn==0.54.0",
+    "yt-dlp==2026.10.26",
+    "yt-dlp-ejs==0.8.0",
+    "deno==2.9.8",
+]
+
+[project.scripts]
+vod-recorder = "live_recorder.entry:main"
+
+[tool.setuptools.packages.find]
+include = ["live_recorder*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+# 화면 파일, 확장의 화면 조각과 정적 파일, 안내 글
+"*" = ["*.html", "*.js", "*.css", "*.md", "*.svg", "*.png", "*.ico", "*.json"]

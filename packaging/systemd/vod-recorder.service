@@ -1,0 +1,44 @@
+# VOD Recorder 사용자 서비스(systemd --user) 예시.
+#   설치: mkdir -p ~/.config/systemd/user && cp vod-recorder.service ~/.config/systemd/user/
+#         systemctl --user daemon-reload && systemctl --user enable --now vod-recorder
+#   로그아웃한 뒤에도 돌게 하려면: loginctl enable-linger "$USER"
+#   첫 설정 코드: journalctl --user -u vod-recorder (또는 vod-recorder account setup-code)
+# 경로를 바꾸려면 아래 Environment 줄과 ReadWritePaths를 함께 고칩니다.
+[Unit]
+Description=VOD Recorder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/vod-recorder web --quiet
+# 기본 위치: 자료 ~/.local/share/vod-recorder, 로그 ~/.local/state/vod-recorder/logs, 녹화 ~/Videos/vod-recorder
+#Environment=LIVE_RECORDER_DATA_DIR=%h/.local/share/vod-recorder
+#Environment=LIVE_RECORDER_RECORD_ROOT=%h/Videos/vod-recorder
+#Environment=LIVE_RECORDER_LOG_DIR=%h/.local/state/vod-recorder/logs
+#Environment=LIVE_RECORDER_HOST=127.0.0.1
+#Environment=LIVE_RECORDER_PORT=8080
+# 녹화를 닫고 마무리할 시간(녹화 프로세스 종료와 파일 정리)을 넉넉히 준다
+KillSignal=SIGTERM
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=10
+
+# 보호 설정
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/vod-recorder %h/.local/state/vod-recorder %h/Videos/vod-recorder
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

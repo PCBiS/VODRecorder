@@ -1,0 +1,44 @@
+# VOD Recorder 실행 예시(Docker Compose·Podman Compose).
+#   mkdir -p data logs recordings && docker compose up -d
+#   docker compose logs vodrecorder   # 첫 설정 코드가 찍힙니다
+# 직접 빌드했다면 image 대신 `build: .`를 씁니다.
+# 컨테이너 안의 실행 사용자는 10001입니다. 볼륨 폴더를 그 사용자가 쓸 수 있게 해 주십시오
+# (예: sudo chown -R 10001:10001 data logs recordings).
+services:
+  vodrecorder:
+    image: ghcr.io/pcbis/vodrecorder:latest
+    container_name: vodrecorder
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    # 자원 상한(예시). 녹화하는 채널 수와 다시보기 받기에 맞춰 고칩니다
+    # mem_limit: 2g        # 채널 몇 개를 녹화하고 다시보기를 받는다면 1~2 GB면 넉넉합니다
+    # pids_limit: 512      # 채널마다 수신기와 ffmpeg가 따로 돕니다
+    security_opt:
+      - no-new-privileges:true
+    # rootless Podman에서는 아래 한 줄을 켜면 볼륨 폴더를 내 사용자 권한 그대로 쓸 수 있습니다
+    # userns_mode: "keep-id:uid=10001,gid=10001"
+    environment:
+      LIVE_RECORDER_HOST: 0.0.0.0   # 컨테이너 안에서는 모든 주소로 엽니다. 바깥 노출은 ports가 정합니다
+      LIVE_RECORDER_PORT: "8080"
+      # 역방향 프록시 뒤에 둔다면 그 프록시의 주소를 적습니다(X-Forwarded-For를 믿을 주소)
+      # LIVE_RECORDER_TRUSTED_PROXIES: "192.0.2.10"
+      # 이름(도메인)으로 열어 쓴다면 그 이름만 받게 합니다(DNS 리바인딩 막기). IP 주소와 localhost는 늘 받습니다
+      # LIVE_RECORDER_ALLOWED_WEB_HOSTS: "rec.example.org"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data              # 설정·기록·비밀 저장소
+      - ./logs:/logs              # 로그와 진단 자료
+      - ./recordings:/recordings  # 녹화·다시보기 파일
+    healthcheck:
+      test: ["CMD", "python", "-m", "live_recorder.healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    stop_signal: SIGTERM
+    stop_grace_period: 60s        # 녹화를 닫고 파일을 정리할 시간

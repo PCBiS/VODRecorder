@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PROGRAM_NAME}} 첫 설정</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/theme.js"></script>
+<script src="/static/boot.js"></script>
+</head>
+<body class="login-body">
+<main class="login-card setup-card">
+  <div class="brand"><span class="brand-dot"></span>{{PROGRAM_NAME}}</div>
+  <h1 class="setup-title">첫 설정: 관리자 계정 만들기</h1>
+  <ul class="setup-rules" data-boot-hide>
+    <li>관리자 계정은 하나입니다. 만들면 바로 로그인되고 이 화면은 더 열리지 않습니다.</li>
+    <li><strong data-pw-rule>비밀번호 규칙을 불러오는 중입니다</strong></li>
+    <li id="setup-warning" class="form-error" hidden></li>
+    <li data-code-part>설정 코드는 서버에서 봅니다. 컨테이너 로그의 <code>{{PROGRAM_NAME}} 첫 설정 코드</code> 줄이나
+      <code>python -m live_recorder account setup-code</code> 명령으로 확인하십시오.</li>
+  </ul>
+  <form id="setup-form" autocomplete="on" data-boot-hide>
+    <label>사용자 이름<input id="username" name="username" autocomplete="username" required maxlength="64" autofocus></label>
+    <label>비밀번호<input id="password" name="password" type="password" autocomplete="new-password" required data-pw-input></label>
+    <label>비밀번호 확인<input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required data-pw-input></label>
+    <label data-code-part>설정 코드<input id="code" name="code" autocomplete="off" spellcheck="false" required placeholder="XXXX-XXXX-…"></label>
+    <p id="setup-error" class="form-error" role="alert" hidden></p>
+    <button class="btn primary wide" type="submit">계정 만들기</button>
+  </form>
+  <section id="boot-failed" class="boot-failed" role="alert" hidden>
+    <p>화면을 불러오지 못했습니다. 새로고침(Ctrl+Shift+R)하십시오.</p>
+    <button id="boot-retry" class="btn primary" type="button">다시 불러오기</button>
+  </section>
+  <p class="hint"><a href="/?view=1">계정 없이 채널 상태만 보기(보기 전용)</a></p>
+</main>
+<script src="/static/setup.js"></script>
+</body>
+</html>

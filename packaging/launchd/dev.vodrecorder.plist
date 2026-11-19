@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  VOD Recorder macOS 사용자 에이전트(launchd) 예시.
+    설치: 아래 USERNAME을 자기 사용자 이름으로 바꾼 뒤
+          cp dev.vodrecorder.plist ~/Library/LaunchAgents/
+          launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.vodrecorder.plist
+    멈춤: launchctl bootout gui/$(id -u)/dev.vodrecorder
+    첫 설정 코드: ~/Library/Logs/VOD Recorder/launchd.err.log (또는 vod-recorder account setup-code)
+  pipx로 설치하면 명령은 ~/.local/bin/vod-recorder 입니다. Homebrew의 ffmpeg를 찾도록 PATH를 줍니다.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.vodrecorder</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/USERNAME/.local/bin/vod-recorder</string>
+    <string>web</string>
+    <string>--quiet</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ExitTimeOut</key>
+  <integer>60</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/USERNAME/Library/Logs/VOD Recorder/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/USERNAME/Library/Logs/VOD Recorder/launchd.err.log</string>
+</dict>
+</plist>

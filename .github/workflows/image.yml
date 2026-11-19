@@ -1,0 +1,101 @@
+# 컨테이너 이미지(linux/amd64, linux/arm64)를 만든다.
+# - vX.Y.Z 태그를 푸시하면(release): 이미지를 ghcr.io/<소유자>/vodrecorder:X.Y.Z, :latest로 올리고,
+#   GitHub 릴리스를 만든 뒤 이미지에 든 FFmpeg 소스 묶음을 해시를 확인해 첨부한다(docs/THIRD-PARTY.md).
+#   태그 이름이 vX.Y.Z 꼴이 아니면 아무것도 올리지 않고 멈춘다.
+# - 손으로 실행하면(build): 두 아키텍처로 빌드만 하고 올리지 않는다. 쓰기 권한이 없다.
+name: image
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false  # 저장소 토큰을 작업 폴더의 git 설정에 남기지 않는다
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: 빌드만(올리지 않음)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: |
+            SOURCE_URL=https://github.com/${{ github.repository }}
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: 태그 확인과 이름
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "정식 판 태그(vX.Y.Z)가 아닙니다: 올리지 않습니다" >&2
+            exit 1
+          fi
+          owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${owner}/vodrecorder" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false  # 저장소 토큰을 작업 폴더의 git 설정에 남기지 않는다
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: GHCR 로그인
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 빌드와 올리기
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            SOURCE_URL=https://github.com/${{ github.repository }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+
+      - name: FFmpeg 소스 묶음 받기와 해시 확인
+        run: |
+          version="$(sed -n 's/^ARG FFMPEG_VERSION=//p' Dockerfile)"
+          sha="$(sed -n 's/^ARG FFMPEG_SHA256=//p' Dockerfile)"
+          printf '%s' "$version" | grep -Eq '^[0-9]+(\.[0-9]+)*$'
+          printf '%s' "$sha" | grep -Eq '^[0-9a-f]{64}$'
+          curl -fsSLo "ffmpeg-${version}.tar.xz" "https://ffmpeg.org/releases/ffmpeg-${version}.tar.xz"
+          echo "${sha}  ffmpeg-${version}.tar.xz" | sha256sum -c -
+          echo "FFMPEG_TARBALL=ffmpeg-${version}.tar.xz" >> "$GITHUB_ENV"
+
+      - name: 릴리스 만들기
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          gh release create "$TAG" "$FFMPEG_TARBALL" \
+            --title "$TAG" \
+            --notes "이미지: ${IMAGE}:${VERSION} (linux/amd64, linux/arm64). 이미지에 든 FFmpeg의 소스 묶음을 함께 올립니다(docs/THIRD-PARTY.md)."

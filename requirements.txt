@@ -1,0 +1,6 @@
+httpx==0.28.1
+fastapi==0.162.4
+uvicorn==0.54.0
+yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0
+deno==2.9.8

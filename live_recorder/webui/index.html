@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PROGRAM_NAME}}</title>
+<link rel="stylesheet" href="/static/style.css">
+<!-- 화면 뼈대(app.js)가 이 순서대로 불러오는 화면별 스크립트·스타일. 서버가 켜진 확장의 파일을 더해 내려 준다 -->
+<meta id="lr-scripts" name="lr-scripts" content="/static/views/channels.js /static/views/history.js /static/views/files.js /static/views/cookies.js /static/views/settings.js">
+<meta id="lr-styles" name="lr-styles" content="">
+<script src="/static/theme.js"></script>
+<script src="/static/boot.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-dot"></span>{{PROGRAM_NAME}}</div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" data-view="channels" role="tab">채널</button>
+    <button class="tab" data-view="history" role="tab">기록</button>
+    <!-- lr-slot:nav -->
+    <button class="tab" data-view="files" role="tab">파일</button>
+    <button class="tab" data-view="cookies" role="tab">쿠키</button>
+    <button class="tab" data-view="settings" role="tab">설정</button>
+  </nav>
+  <div class="who">
+    <span id="disk" class="disk" title="녹화 디스크의 여유 공간"></span>
+    <button id="theme" class="btn ghost small theme-btn" type="button" title="색: 자동" aria-label="색: 자동" data-state="auto">
+      <!-- 색 구성 그림(글자색을 따른다): 어둡게는 달, 밝게는 해, 자동은 해 그림과 오른쪽 아래의 동그란 A 표지 -->
+      <svg class="theme-icon" data-icon="dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>
+      <svg class="theme-icon" data-icon="light" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g></svg>
+      <svg class="theme-icon" data-icon="auto" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <defs>
+          <!-- 해에서 표지 둘레를 비운다 -->
+          <mask id="theme-auto-ring"><rect width="24" height="24" fill="#fff"/><circle cx="17.5" cy="17.5" r="6.6" fill="#000"/></mask>
+          <!-- 표지 원에서 A 모양을 뚫는다(어떤 배경에서도 보인다) -->
+          <mask id="theme-auto-badge"><rect width="24" height="24" fill="#fff"/><path d="M15.3 20.2l2.2-5.6 2.2 5.6M16.1 18.4h2.8" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></mask>
+        </defs>
+        <g mask="url(#theme-auto-ring)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="10" cy="10" r="3.6"/>
+          <path d="M10 2.6v1.6M10 15.8v1.6M2.6 10h1.6M15.8 10h1.6M4.8 4.8l1.1 1.1M14.1 14.1l1.1 1.1M4.8 15.2l1.1-1.1M14.1 5.9l1.1-1.1"/>
+        </g>
+        <circle cx="17.5" cy="17.5" r="5.4" fill="currentColor" mask="url(#theme-auto-badge)"/>
+      </svg>
+    </button>
+    <span id="who"></span><button id="logout" class="btn ghost small">로그아웃</button>
+  </div>
+</header>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="view-only-banner" class="banner" role="note" hidden><span id="view-only-text"></span><a href="/setup">첫 설정 화면으로</a></div>
+<main>
+  <section id="boot-failed" class="boot-failed" role="alert" hidden>
+    <p>화면을 불러오지 못했습니다. 새로고침(Ctrl+Shift+R)하십시오.</p>
+    <button id="boot-retry" class="btn primary" type="button">다시 불러오기</button>
+  </section>
+  <section id="view-channels" class="view" data-boot-hide hidden>
+    <div class="section-head">
+      <h1>채널</h1>
+      <span id="refreshed" class="muted"></span>
+    </div>
+    <p id="gate-note" class="banner inline" role="status" hidden></p>
+    <div id="channel-filter" class="row" role="group" aria-label="플랫폼 거르기" hidden></div>
+    <div id="channel-list" class="card-grid"></div>
+  </section>
+
+  <section id="view-history" class="view" data-boot-hide hidden>
+    <div class="section-head">
+      <h1>녹화 기록</h1>
+      <span id="tl-label" class="muted"></span>
+      <div class="row">
+        <button id="tl-prev" class="btn small" type="button">이전 주</button>
+        <button id="tl-next" class="btn small" type="button">다음 주</button>
+      </div>
+    </div>
+    <div class="panel timeline-panel">
+      <div class="legend" aria-label="범례">
+        <span><i class="swatch normal"></i>정상</span>
+        <span><i class="swatch split"></i>재접속으로 나뉜 파일</span>
+        <span><i class="swatch live"></i>녹화 중</span>
+        <span class="muted">한 줄은 정오부터 다음 날 정오까지(한국 시각)</span>
+      </div>
+      <div id="timeline"></div>
+      <p id="tl-detail" class="tl-detail" hidden></p>
+    </div>
+    <h2>녹화 목록</h2>
+    <div id="session-list" class="session-list"></div>
+  </section>
+
+  <!-- lr-slot:views -->
+
+  <section id="view-files" class="view" data-boot-hide hidden>
+    <div class="section-head"><h1>파일</h1><span id="files-note" class="muted"></span></div>
+    <div class="panel">
+      <div class="row">
+        <label class="inline">허용 루트<select id="fm-root"></select></label>
+        <span id="fm-usage" class="muted"></span>
+      </div>
+      <nav id="fm-crumbs" class="crumbs" aria-label="경로"></nav>
+      <div class="row fm-actions">
+        <button class="btn small" id="fm-up">위로</button>
+        <button class="btn small" id="fm-mkdir" data-write>새 폴더</button>
+        <button class="btn small" id="fm-rename" data-write>이름 변경</button>
+        <button class="btn small" id="fm-move" data-write>이동</button>
+        <button class="btn small danger" id="fm-delete" data-write>삭제</button>
+        <span id="fm-delete-mode" class="muted"></span>
+      </div>
+    </div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th class="check-col"><input type="checkbox" id="fm-all" aria-label="모두 선택"></th><th>이름</th><th>크기</th><th>수정</th><th></th></tr></thead>
+      <tbody id="fm-body"></tbody>
+    </table></div>
+  </section>
+
+  <section id="view-cookies" class="view" data-boot-hide hidden>
+    <!-- 제목·안내·자격 이름은 플랫폼 정보(/api/platforms)로 채운다. 플랫폼이 둘 이상일 때만 고르는 칸이 보인다 -->
+    <div class="section-head"><h1 id="cookie-title">쿠키</h1></div>
+    <div class="panel">
+      <label id="cookie-platform-field" hidden>플랫폼<select id="cookie-platform"></select></label>
+      <p id="cookie-help" class="muted"></p>
+      <div id="cookie-badges"></div>
+      <p id="cookie-last" class="muted"></p>
+      <form id="cookie-form" autocomplete="off">
+        <div id="cookie-fields"></div>
+        <div class="row">
+          <button class="btn primary" type="submit">저장</button>
+          <button class="btn" type="button" id="cookie-check">쿠키 확인</button>
+          <button class="btn danger" type="button" id="cookie-clear">지우기</button>
+          <span id="cookie-result" class="muted"></span>
+        </div>
+      </form>
+    </div>
+    <!-- 쿠키 파일 올리기(값을 직접 넣는 방법과 나란히). 서버가 그 플랫폼에 필요한 쿠키만 골라 저장한다 -->
+    <form id="cookie-upload-form" class="panel" autocomplete="off">
+      <h2>쿠키 파일 올리기</h2>
+      <p class="muted">브라우저 확장(예: Get cookies.txt LOCALLY)으로 내보낸 Netscape cookies.txt나 JSON 파일을 고르거나 내용을 붙여 넣으십시오. 해당 사이트의 쿠키만 내보내는 것을 권합니다. 모든 사이트의 쿠키가 든 파일을 올려도 필요한 쿠키만 쓰고 나머지는 버립니다. 올린 파일 자체는 저장하지 않습니다. <span id="cookie-upload-extra"></span></p>
+      <label>파일<input type="file" id="cookie-upload-file" accept=".txt,.json,text/plain,application/json"></label>
+      <label>또는 내용 붙여 넣기<textarea id="cookie-upload-text" rows="4" spellcheck="false" placeholder="파일 내용(256KB 이하)"></textarea></label>
+      <div class="row"><button class="btn primary" type="submit">쿠키 파일 올리기</button><span id="cookie-upload-result" class="muted"></span></div>
+    </form>
+  </section>
+
+  <section id="view-settings" class="view" data-boot-hide hidden>
+    <div class="section-head"><h1>설정</h1></div>
+    <!-- 하위 탭. 탭마다 저장 단추가 그 탭의 설정 키만 보낸다 -->
+    <div id="settings-tabs" class="subtabs" role="tablist" aria-label="설정 분류">
+      <button class="subtab" id="stab-record" type="button" role="tab" data-stab="record" aria-controls="spanel-record" aria-selected="false" tabindex="-1">녹화</button>
+      <!-- lr-slot:settings-tabs -->
+      <button class="subtab" id="stab-notify" type="button" role="tab" data-stab="notify" aria-controls="spanel-notify" aria-selected="false" tabindex="-1">알림</button>
+      <button class="subtab" id="stab-account" type="button" role="tab" data-stab="account" aria-controls="spanel-account" aria-selected="false" tabindex="-1">계정·보안</button>
+      <button class="subtab" id="stab-general" type="button" role="tab" data-stab="general" aria-controls="spanel-general" aria-selected="false" tabindex="-1">일반</button>
+    </div>
+    <div id="spanel-record" class="subpanel" role="tabpanel" aria-labelledby="stab-record" tabindex="0" hidden>
+    <form id="settings-form" class="panel" data-part="record" autocomplete="off">
+      <h2>녹화</h2>
+      <div class="grid">
+        <label>녹화 최소 여유 공간(GiB)<input name="min_free_gib" type="number" min="0" step="0.5"></label>
+      </div>
+      <div id="settings-timemachine">
+      <h2>타임머신</h2>
+      <div class="grid">
+        <label class="check"><input name="timemachine_enabled" type="checkbox">방송 앞부분부터 녹화</label>
+        <label>되감기(초, 0~3600)<input name="rewind_seconds" type="number" min="0" max="3600"></label>
+        <p id="rewind-note" class="muted field-note span2" hidden></p>
+      </div>
+      </div>
+      <h2>마무리</h2>
+      <div class="grid">
+        <label class="check"><input name="remux_enabled" type="checkbox">녹화가 끝나면 파일 형식 정리(재인코딩 없음)</label>
+        <label class="check"><input name="delete_original" type="checkbox">정리한 파일을 검증한 뒤 원본 삭제</label>
+      </div>
+      <h2>파일 이름</h2>
+      <div class="grid">
+        <label class="span2">파일명 패턴<input name="filename_pattern" spellcheck="false"></label>
+      </div>
+      <p id="filename-pattern-problem" class="form-error field-note" role="status" hidden></p>
+      <details id="token-help" class="token-help" open>
+        <summary>쓸 수 있는 토큰</summary>
+        <p class="muted">토큰을 누르면 패턴 칸의 커서 자리에 들어갑니다. 예시 값은 지금 고른 모양으로 서버가 만듭니다.</p>
+        <div class="token-table" role="table" aria-label="파일 이름 토큰">
+          <div class="token-row token-head" role="row"><span role="columnheader">토큰</span><span role="columnheader">뜻</span><span role="columnheader">예시 값</span></div>
+          <div id="token-rows" role="rowgroup"></div>
+        </div>
+      </details>
+      <div class="grid">
+        <label><span>날짜 모양(<code>{date}</code>)</span><select name="filename_date_format">
+          <option value="YYYY-MM-DD">YYYY-MM-DD</option><option value="YYYY.MM.DD">YYYY.MM.DD</option><option value="YYYY_MM_DD">YYYY_MM_DD</option>
+          <option value="YYYYMMDD">YYYYMMDD</option><option value="YY-MM-DD">YY-MM-DD</option><option value="YY.MM.DD">YY.MM.DD</option>
+          <option value="YYMMDD">YYMMDD</option>
+        </select></label>
+        <label><span>시각 모양(<code>{time}</code>)</span><select name="filename_time_format">
+          <option value="HHhMMmSSs">HHhMMmSSs</option><option value="HH-MM-SS">HH-MM-SS</option><option value="HH.MM.SS">HH.MM.SS</option>
+          <option value="HHMMSS">HHMMSS</option><option value="HH시MM분SS초">HH시MM분SS초</option><option value="HHhMMm">HHhMMm</option>
+          <option value="HH-MM">HH-MM</option>
+        </select></label>
+      </div>
+      <p class="muted filename-help">시각은 24시간제, 한국 시각입니다. 바꾼 모양은 다음에 만드는 파일부터 쓰고, 이미 있는 파일과 녹화 중인 파일의 이름은 그대로입니다. 초가 없는 모양에서 이름이 겹치면 뒤에 번호가 붙습니다.</p>
+      <p class="filename-example">예시: <code id="filename-example"></code></p>
+      <div class="row">
+        <button class="btn primary" type="submit">이 탭 저장</button>
+        <span id="settings-result" class="muted" data-result></span>
+      </div>
+    </form>
+    <!-- 플랫폼마다 스캔 주기와 채널 사이 간격(꺼진 플랫폼은 감춘다). 줄마다 따로 저장하고 다음 바퀴부터 적용한다 -->
+    <section id="gate-group" class="panel" hidden>
+      <h2>플랫폼별 확인 간격</h2>
+      <p class="muted">스캔 주기마다 그 플랫폼의 채널들을 한 바퀴 확인합니다. 한 바퀴 안에서는 채널 사이 간격만큼 쉬며 하나씩 확인합니다. 채널 수 × 채널 사이 간격이 스캔 주기보다 길면 앞 바퀴가 끝난 뒤 다음 바퀴를 시작합니다.</p>
+      <div id="gate-rows"></div>
+    </section>
+    </div>
+    <!-- lr-slot:settings-panels -->
+    <div id="spanel-notify" class="subpanel" role="tabpanel" aria-labelledby="stab-notify" tabindex="0" hidden>
+    <form id="settings-notify-form" class="panel" data-part="notify" autocomplete="off">
+      <h2>텔레그램 알림</h2>
+      <div class="grid">
+        <label class="check"><input name="notify_enabled" type="checkbox">알림 사용</label>
+        <label>같은 알림 다시 보내지 않는 시간(초, 0이면 끔)<input name="notify_dedupe_seconds" type="number" min="0" max="86400"></label>
+      </div>
+      <div id="event-list" class="events"></div>
+      <div class="row">
+        <button class="btn primary" type="submit">이 탭 저장</button>
+        <span id="settings-notify-result" class="muted" data-result></span>
+      </div>
+    </form>
+    <form id="telegram-form" class="panel" autocomplete="off">
+      <h2>텔레그램 봇</h2>
+      <div class="kv"><span>봇 토큰</span><span id="tg-token" class="badge"></span></div>
+      <div class="kv"><span>chat_id</span><span id="tg-chat" class="badge"></span></div>
+      <div class="grid">
+        <label>봇 토큰<input name="bot_token" type="password" autocomplete="off" placeholder="바꿀 때만 입력"></label>
+        <label>chat_id<input name="chat_id" type="password" autocomplete="off" placeholder="바꿀 때만 입력"></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" type="submit">저장</button>
+        <button class="btn" type="button" id="tg-test">테스트 전송</button>
+        <span id="tg-result" class="muted"></span>
+      </div>
+    </form>
+    </div>
+    <div id="spanel-account" class="subpanel" role="tabpanel" aria-labelledby="stab-account" tabindex="0" hidden>
+    <form id="settings-account-form" class="panel" data-part="account" autocomplete="off">
+      <h2>로그인</h2>
+      <div class="grid">
+        <label>세션 유지(분, 쓰지 않은 시간. 0이면 제한 없음)<input name="session_minutes" type="number" min="0"></label>
+        <label class="check"><input name="login_limit_enabled" type="checkbox">로그인 실패 횟수 제한</label>
+        <label class="span2">신뢰할 프록시 주소(IP나 CIDR, 한 줄에 하나. 비우면 X-Forwarded-For를 읽지 않습니다)
+          <textarea name="trusted_proxies" rows="2" spellcheck="false"></textarea></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" type="submit">이 탭 저장</button>
+        <span id="settings-account-result" class="muted" data-result></span>
+      </div>
+    </form>
+    <form id="password-form" class="panel" autocomplete="off">
+      <h2>비밀번호 변경</h2>
+      <p class="muted"><span data-pw-rule></span> 바꾸면 열려 있는 모든 세션이 끊기고 다시 로그인합니다.</p>
+      <div class="grid">
+        <label>현재 비밀번호<input name="current" type="password" autocomplete="current-password" required></label>
+        <span></span>
+        <label>새 비밀번호<input name="new" type="password" autocomplete="new-password" required data-pw-input></label>
+        <label>새 비밀번호 확인<input name="confirm" type="password" autocomplete="new-password" required data-pw-input></label>
+      </div>
+      <label class="check"><input name="revoke_keys" type="checkbox">접근 키도 모두 폐기(비밀번호가 새어 나갔다고 의심될 때)</label>
+      <div class="row"><button class="btn primary" type="submit">비밀번호 변경</button><span id="password-result" class="muted"></span></div>
+    </form>
+    <section id="apikeys-group" class="panel" hidden>
+      <h2>접근 키</h2>
+      <p class="muted">프로그램이나 AI 도구가 화면 없이 API로 상태를 보거나 녹화·다운로드를 운영할 때 씁니다. 설정 변경·쿠키·파일 삭제 같은 일은 키로 할 수 없습니다.
+        <a href="/api/guide" target="_blank" rel="noopener">API 안내</a> · <a href="/api/openapi.json" target="_blank" rel="noopener">OpenAPI 문서</a></p>
+      <form id="apikeys-form" class="grid" autocomplete="off">
+        <label>이름<input name="name" maxlength="40" required></label>
+        <label>권한<select name="scope"><option value="view">보기</option><option value="operate">운영</option></select></label>
+        <label>만료<select name="expiry"><option value="none">없음</option><option value="30d">30일</option><option value="90d">90일</option><option value="1y">1년</option></select></label>
+        <div class="row"><button class="btn primary" type="submit">발급</button><span id="apikeys-result" class="muted"></span></div>
+      </form>
+      <div id="apikeys-new" class="field-note" hidden>
+        <p><strong>새 키</strong>: 이 값은 지금만 보입니다. 다시 볼 수 없으니 안전한 곳에 적어 두십시오.</p>
+        <div class="row"><code id="apikeys-value"></code><button class="btn" type="button" id="apikeys-copy">복사</button></div>
+      </div>
+      <div class="table-wrap"><table class="table" id="apikeys-table"><thead><tr><th>이름</th><th>권한</th><th>앞 8자</th><th>만든 시각</th><th>만료</th><th>마지막 사용</th><th></th></tr></thead><tbody></tbody></table></div>
+    </section>
+    </div>
+    <div id="spanel-general" class="subpanel" role="tabpanel" aria-labelledby="stab-general" tabindex="0" hidden>
+    <form id="settings-general-form" class="panel" data-part="general" autocomplete="off">
+      <h2>화면</h2>
+      <div class="grid">
+        <label>날짜 모양<select name="display_date_format">
+          <option value="YYYY-MM-DD">YYYY-MM-DD</option><option value="YYYY.MM.DD">YYYY.MM.DD</option><option value="YYYY/MM/DD">YYYY/MM/DD</option>
+          <option value="YY.MM.DD">YY.MM.DD</option><option value="MM/DD">MM/DD</option><option value="M월 D일">M월 D일</option>
+        </select></label>
+        <label>시각 모양<select name="display_time_format">
+          <option value="HH:MM">HH:MM</option><option value="HH:MM:SS">HH:MM:SS</option><option value="오전/오후 H:MM">오전/오후 H:MM</option>
+        </select></label>
+      </div>
+      <p class="muted">화면에 보이는 날짜와 시각의 모양입니다. 파일 이름의 모양과는 따로입니다. 늘 한국 시각으로 보이고, 로그처럼 초가 필요한 곳에는 초를 더합니다. 예시: <span id="display-example"></span></p>
+      <h2>파일 관리자</h2>
+      <div class="grid">
+        <label class="check"><input name="fm_enabled" type="checkbox">파일 관리자 사용</label>
+        <label class="check"><input name="fm_readonly" type="checkbox">읽기 전용(탐색·내려받기만)</label>
+        <label class="check"><input name="fm_trash" type="checkbox">삭제하면 휴지통(.trash)으로 옮김</label>
+        <label class="check"><input name="fm_show_hidden" type="checkbox">숨김·임시(.part) 파일 보기</label>
+        <label class="span2">추가 허용 루트(절대 경로, 한 줄에 하나. 채널<!-- lr-slot:fm-roots --> 폴더는 자동으로 들어갑니다)
+          <textarea name="fm_roots" rows="2" spellcheck="false"></textarea></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" type="submit">이 탭 저장</button>
+        <span id="settings-general-result" class="muted" data-result></span>
+      </div>
+    </form>
+    <form id="export-form" class="panel" autocomplete="off">
+      <h2>로그 내려받기</h2>
+      <p class="muted">로그 파일, <!-- lr-slot:export-files -->진단 요약을 zip 하나로 묶어 내려받습니다. 서버에는 묶음을 남기지 않습니다.</p>
+      <div class="row export-row">
+        <label class="inline">기간<select id="export-range" name="range">
+          <option value="1">최근 1일</option><option value="3" selected>최근 3일</option><option value="7">최근 7일</option><option value="all">전체</option>
+        </select></label>
+        <label class="check"><input id="export-strict" name="strict" type="checkbox">더 가리기(채널·제목·파일 이름을 익명화합니다)</label>
+      </div>
+      <div class="row"><button class="btn primary" id="export-button" type="submit">로그 내려받기</button><span id="export-result" class="muted"></span></div>
+      <p id="export-info" class="muted field-note export-info">채널 이름·방송 제목·파일 이름이 들어갑니다. 쿠키·비밀번호·토큰·접속 주소는 들어가지 않습니다. 무엇이 들어가는지는 프로그램 저장소의 <code>docs/LOG-EXPORT.md</code> 문서에 있습니다. 공개된 곳에 올리면 누구나 볼 수 있으니, 꺼려지면 "더 가리기"를 켜거나 올리기 전에 zip을 직접 열어 확인하십시오.</p>
+    </form>
+    <!-- 켜야 쓰는 플랫폼(예: 외부 도구가 필요한 플랫폼)의 켜기·끄기. 그런 플랫폼이 없으면 보이지 않는다 -->
+    <div id="optin-group" hidden></div>
+    <!-- 플랫폼 모듈이 쓰는 외부 도구(판·출처·갱신). 도구가 없으면 보이지 않는다 -->
+    <div id="tools-group" hidden></div>
+    <!-- 확장 켜고 끄기. 등록된 확장이 없으면 보이지 않는다 -->
+    <section id="extensions-group" class="panel" hidden>
+      <h2>확장</h2>
+      <form id="extensions-form" autocomplete="off">
+        <div id="extensions-list" class="grid"></div>
+        <p id="extensions-note" class="muted"></p>
+        <div class="row"><button class="btn primary" type="submit">확장 설정 저장</button></div>
+      </form>
+    </section>
+    </div>
+  </section>
+</main>
+
+<dialog id="channel-dialog">
+  <form id="channel-form" method="dialog" autocomplete="off">
+    <h2 id="channel-dialog-title">채널 추가</h2>
+    <label id="channel-platform-field" hidden>플랫폼<select name="platform"></select></label>
+    <label>채널 주소나 ID<input name="channel_id" spellcheck="false" maxlength="300" autocomplete="off" placeholder=""></label>
+    <p id="channel-id-note" class="muted field-note" hidden></p>
+    <label>표시 이름<input name="name" maxlength="80" placeholder="@이름으로 넣으면 조회한 채널 이름으로 채웁니다"></label>
+    <label>저장 폴더(녹화 루트 아래)<input name="output_dir" spellcheck="false"></label>
+    <div class="grid">
+      <label>화질<select name="quality"></select></label>
+      <label>확장자<select name="extension"><option>.mp4</option><option>.ts</option></select></label>
+    </div>
+    <label class="check"><input name="auto_record" type="checkbox" checked>자동 녹화</label>
+    <p id="channel-error" class="form-error" role="alert" hidden></p>
+    <div class="row end">
+      <button class="btn danger push-left" type="button" id="channel-delete" hidden>채널 삭제</button>
+      <button class="btn" type="button" id="channel-cancel">취소</button>
+      <button class="btn primary" type="submit">저장</button>
+    </div>
+  </form>
+</dialog>
+<script src="/static/app.js"></script>
+</body>
+</html>
