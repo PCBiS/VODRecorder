@@ -459,6 +459,66 @@ def test_admission_reasons_and_end_action():
     assert spaced["reason"] == "space" and spaced["suspend"] is True and spaced["reason_label"] == "여유 공간 부족"
 
 
+def test_end_action_per_rule_wins_over_the_global_setting():
+    """규칙마다 둔 끝 동작이 전체 설정보다 먼저다. 없는 규칙은 전체 설정을 따른다. 같은 시각에 끝나면 멈춤이 이긴다."""
+    every = [0, 1, 2, 3, 4, 5, 6]
+    day = {"days": every, "start": "09:00", "end": "19:00", "end_action": "finish"}
+    night = {"days": every, "start": "22:00", "end": "02:00", "end_action": "pause"}
+    plain = {"days": every, "start": "04:00", "end": "05:00"}
+    rules = (day, night, plain)
+    assert schedule.rules_to_json(schedule.parse_rules(list(rules))) == list(rules)  # 끝 동작이 없는 규칙은 그대로 없다
+
+    def state(when, default="pause", use=rules):
+        return admission.evaluate(settings(replay_window_enabled=True, replay_window_rules=use, replay_window_end_action=default), when)
+
+    s = state(at(2026, 11, 13, 20, 0))  # 낮 규칙(끝까지 받기)이 끝난 뒤: 전체 설정이 멈춤이어도 멈추지 않는다
+    assert s["reason"] == "window" and s["suspend"] is False and s["end_action"] == "finish"
+    s = state(at(2026, 11, 14, 3, 0), default="finish")  # 밤 규칙(멈춤)이 끝난 뒤: 전체 설정이 끝까지여도 멈춘다
+    assert s["reason"] == "window" and s["suspend"] is True and s["end_action"] == "pause"
+    assert state(at(2026, 11, 14, 6, 0), default="finish")["suspend"] is False  # 끝 동작이 없는 규칙: 전체 설정
+    assert state(at(2026, 11, 14, 6, 0), default="pause")["suspend"] is True
+    assert state(at(2026, 11, 13, 10, 0))["open"] and state(at(2026, 11, 13, 10, 0))["end_action"] == "finish"
+    both = ({**day, "end_action": "finish"}, {"days": every, "start": "12:00", "end": "19:00", "end_action": "pause"})
+    assert state(at(2026, 11, 13, 20, 0), default="finish", use=both)["suspend"] is True
+    for bad in ({**day, "end_action": "stop"}, {**day, "extra": 1}):
+        try:
+            schedule.parse_rules([bad])
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_channel_rules_win_over_the_global_rules():
+    """채널을 지정한 규칙: 그 채널의 작업은 자기 규칙만 따른다(시간대 사용 설정과 상관없이). 다른 작업은 전체 규칙을 따른다."""
+    every = [0, 1, 2, 3, 4, 5, 6]
+    day = {"days": every, "start": "09:00", "end": "19:00"}
+    own = {"days": every, "start": "01:00", "end": "08:00", "end_action": "finish", "target": "chzzk:" + "a" * 32}
+    rules = (day, own)
+    mine, other = "chzzk:" + "a" * 32, "chzzk:" + "b" * 32
+    assert schedule.rules_to_json(schedule.parse_rules(list(rules))) == list(rules)
+    assert schedule.target_of("chzzk", "a" * 32) == mine and schedule.target_of("", "x") is None
+
+    def state(when, target=None, enabled=True):
+        return admission.evaluate(settings(replay_window_enabled=enabled, replay_window_rules=rules), when, target=target)
+
+    noon, night = at(2026, 11, 13, 12, 0), at(2026, 11, 13, 3, 0)
+    assert state(noon)["open"] and state(noon)["window_scope"] == "all" and not state(night)["open"]
+    s = state(noon, mine)  # 낮: 전체 규칙으로는 열려 있지만 이 채널은 자기 규칙(새벽)만 본다
+    assert s["reason"] == "window" and s["window_scope"] == "channel" and s["suspend"] is False and s["end_action"] == "finish"
+    assert s["next_open_at"] == at(2026, 11, 14, 1, 0).isoformat()
+    assert state(night, mine)["open"]  # 새벽: 전체 규칙으로는 닫혀 있지만 이 채널은 열려 있다
+    assert state(noon, other)["open"] and not state(night, other)["open"]  # 자기 규칙이 없는 채널은 전체 규칙
+    # 시간대 사용을 꺼도 채널의 자기 규칙은 따른다. 다른 작업은 언제든 받는다
+    assert state(noon, mine, enabled=False)["reason"] == "window" and state(night, mine, enabled=False)["open"]
+    assert state(night, other, enabled=False)["open"] and state(night, enabled=False)["window_scope"] is None
+    for bad in ({**day, "target": "no-colon"}, {**day, "target": "chzzk:a b"}, {**day, "target": 3}):
+        try:
+            schedule.parse_rules([bad])
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
 def test_window_settings_are_validated_and_kept(rp):
     """시간대 설정의 검증과 유지. downloads 확장의 설정이라 설정 API로 바꾸고 확장 설정으로 남는다."""
     from live_recorder.core import extensions
@@ -534,6 +594,33 @@ def test_window_end_finish_keeps_running_job(rp):
     now["t"] = at(2026, 11, 20, 9, 0)
     service.poke()
     assert wait_job(rp, nxt)["status"] == "completed"
+
+
+def test_queue_skips_jobs_outside_their_channel_window(rp):
+    """대기열: 전체 시간대가 닫혀 있어도, 자기 규칙의 시간대가 열린 채널의 작업은 앞 작업을 건너뛰어 시작한다."""
+    from live_recorder.ext.downloads.manager import OWNER
+
+    service = rp.app.state.extensions.contexts["downloads"].service
+    now = {"t": at(2026, 11, 13, 20, 0)}  # 금요일 저녁: 전체 규칙(09~19시) 밖, 채널 규칙(19~23시) 안
+    service.clock = lambda: now["t"]
+    mine = "chzzk:" + "c" * 32
+    assert rp.call("PATCH", "/api/settings", json={"replay_window_rules": [
+        {"days": [4], "start": "09:00", "end": "19:00"}, {"days": [4], "start": "19:00", "end": "23:00", "target": mine}],
+        "replay_window_enabled": True, "replay_connections": 4}).status_code == 200
+    a = analyze(rp, [DASH])
+    first = enqueue(rp, a, [{"url": DASH, "quality": FILE_Q}], key="chan-0001")[0]["id"]
+    second = enqueue(rp, a, [{"url": DASH, "quality": FILE_Q}], key="chan-0002", confirm=True)[0]["id"]
+    manager = service.manager
+    data = manager._get("job", OWNER, second)
+    assert data["status"] == "queued"
+    data["policy_target"] = mine
+    manager._save("job", OWNER, data)
+    service.poke()
+    assert wait_job(rp, second)["status"] == "completed"  # 뒤에 넣었지만 자기 시간대가 열려 있다
+    assert job(rp, first)["status"] == "queued"  # 전체 규칙을 따르는 작업은 기다린다
+    now["t"] = at(2026, 11, 20, 9, 30)
+    service.poke()
+    assert wait_job(rp, first)["status"] == "completed"
 
 
 # ---- 녹화 중 멈춤 -------------------------------------------------------------------------

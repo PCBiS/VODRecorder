@@ -9,6 +9,7 @@
   --topbar-bg: rgba(255, 255, 255, .72); --topbar-solid: #ffffff; --backdrop: rgba(0, 0, 0, .32);
   --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .05); --shadow-pop: 0 12px 40px rgba(0, 0, 0, .14);
   --field: #f5f5f7; --edge: rgba(0, 0, 0, .05); --danger-ink: #ffffff;
+  --btn-bg: #e8e8ed; --btn-line: #c7c7cf; --btn-hover: #dcdce3;
   color-scheme: light;
   /* 모양(두 구성 공통) */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
@@ -16,6 +17,7 @@
   --radius: 18px; --radius-card: 18px; --radius-input: 11px; --radius-small: 10px; --radius-pill: 999px;
   --gap: 1rem; --gutter: 1.5rem; --page-max: 1200px;
   --ease: cubic-bezier(.25, .1, .25, 1); --fast: .15s; --mid: .22s;
+  --brand: #00ffa3; --brand-ring: rgba(0, 255, 163, .28); /* 위쪽 이름 옆의 점. 치지직의 녹색 */
 }
 /* 기본은 브라우저 설정을 따르고, 화면에서 고르면 data-theme가 이긴다 */
 @media (prefers-color-scheme: dark) {
@@ -29,6 +31,7 @@
   --topbar-bg: rgba(22, 22, 24, .72); --topbar-solid: #161618; --backdrop: rgba(0, 0, 0, .6);
   --shadow: none; --shadow-pop: 0 12px 40px rgba(0, 0, 0, .5);
   --field: #2c2c2e; --edge: rgba(255, 255, 255, .07); --danger-ink: #2a0705;
+  --btn-bg: #2e2e32; --btn-line: #5c5c63; --btn-hover: #3a3a3f;
   color-scheme: dark;
   }
 }
@@ -42,6 +45,7 @@
   --topbar-bg: rgba(22, 22, 24, .72); --topbar-solid: #161618; --backdrop: rgba(0, 0, 0, .6);
   --shadow: none; --shadow-pop: 0 12px 40px rgba(0, 0, 0, .5);
   --field: #2c2c2e; --edge: rgba(255, 255, 255, .07); --danger-ink: #2a0705;
+  --btn-bg: #2e2e32; --btn-line: #5c5c63; --btn-hover: #3a3a3f;
   color-scheme: dark;
 }
 :root[data-theme="light"] {
@@ -54,6 +58,7 @@
   --topbar-bg: rgba(255, 255, 255, .72); --topbar-solid: #ffffff; --backdrop: rgba(0, 0, 0, .32);
   --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .05); --shadow-pop: 0 12px 40px rgba(0, 0, 0, .14);
   --field: #f5f5f7; --edge: rgba(0, 0, 0, .05); --danger-ink: #ffffff;
+  --btn-bg: #e8e8ed; --btn-line: #c7c7cf; --btn-hover: #dcdce3;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -579,3 +584,148 @@ dialog::backdrop { background: var(--backdrop); -webkit-backdrop-filter: blur(4p
 /* 제목 줄에 나란히 놓인 제목·고르기·단추는 가운데 높이를 맞춘다(각자의 아래 여백이 줄을 어긋나게 했다) */
 .section-head h2, .section-head .seg { margin-top: 0; margin-bottom: 0; }
 .section-head:not(:first-child) { margin-top: 2.25rem; margin-bottom: 1rem; }
+
+/* ================================================================
+   간격과 통일 규칙. 화면마다 따로 잡던 여백을 한곳에서 정한다.
+   - 입력 칸과 고르는 칸은 높이가 같다.
+   - 면(panel)과 창 안의 첫 요소 위, 끝 요소 아래에는 여백이 없다(면의 안쪽 여백만 남는다).
+   - 격자 안의 칸 사이 간격은 격자가 준다(칸마다의 아래 여백은 없앤다).
+   - 저장·실행 단추 줄(form-actions)은 앞의 내용과 같은 거리만큼 떨어진다.
+   ================================================================ */
+input:not([type=checkbox]):not([type=radio]):not([type=file]), select { min-height: 2.75rem; }
+:where(.panel, dialog) p { margin: 0 0 .9rem; }
+.panel > :first-child, .panel > form > :first-child, dialog > :first-child, dialog > form > :first-child { margin-top: 0; }
+.panel > :last-child, .panel > form > :last-child, dialog > :last-child, dialog > form > :last-child,
+.gate-row > :last-child, .optin-row > :last-child { margin-bottom: 0; }
+
+.grid, .events { gap: 1rem 1.5rem; margin: 0 0 1rem; }
+.events { row-gap: .7rem; }
+.grid > label, .events > label, .grid > fieldset { margin: 0; }
+.grid > .field-note { margin: -.5rem 0 0; }
+.grid > label.check.beside, .grid > .row { min-height: 2.75rem; } /* 입력 칸 옆에 놓인 체크·단추는 그 칸의 가운데 높이에 온다 */
+.row > label { margin-bottom: 0; }
+
+.panel h2, dialog h2 { margin: 2rem 0 1rem; }
+.panel h3 { margin: 1.6rem 0 .7rem; }
+.form-actions { margin-top: 1.5rem; }
+.kv + :not(.kv) { margin-top: 1rem; }
+.panel > .table-wrap, .panel > form + .table-wrap { margin-top: 1.5rem; }
+fieldset.radios { margin: 0; }
+fieldset.radios legend { margin-bottom: .5rem; }
+fieldset.radios label.check { margin: 0; }
+.window-rules { margin: 0 0 .8rem; }
+.window-rules:empty { margin: 0; }
+.export-row { gap: .6rem 1.5rem; }
+.export-info { margin: 1rem 0 0; }
+.filename-help { margin: 0 0 .6rem; }
+.filename-example { margin: 0; }
+
+/* 묶음이 이어질 때(플랫폼별 간격, 켜고 끄는 플랫폼)는 줄로 나눈다 */
+.gate-row + .gate-row, .optin-row + .optin-row { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.gate-row > h3:first-child, .optin-row > h3:first-child { margin-top: 0; color: var(--ink); }
+.optin-row .form-actions, .gate-row .form-actions { margin-top: 1rem; }
+
+/* 확장 목록: 이름 줄과 설명이 한 묶음이고, 묶음끼리는 위쪽을 맞춘다 */
+#extensions-list { align-items: start; row-gap: 1.25rem; }
+.ext-row > label.check { margin: 0 0 .35rem; }
+.ext-row > .field-note { margin: 0; }
+#replay-modes { margin-bottom: 1.25rem; }
+#replay-list-pane .form-actions { margin-top: 1rem; }
+#cookie-badges { margin-bottom: .9rem; }
+.switch { margin: 0; } /* 카드의 "자동" 스위치가 옆 단추와 같은 높이에 온다 */
+label.check input, .switch input { flex: 0 0 auto; } /* 글이 길어 줄이 넘어가도 체크 칸이 줄어들지 않는다 */
+
+/* 단추의 가시성: 면과 같은 색에 옅은 테두리뿐이라 두 구성 모두에서 잘 보이지 않았다. 옅게 채우고 테두리를 또렷하게 한다 */
+.btn { background: var(--btn-bg); border-color: var(--btn-line); }
+.btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--btn-line); }
+.btn.primary { background: var(--accent); border-color: transparent; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; }
+.btn.ghost { background: none; border-color: transparent; }
+.btn.ghost:hover:not(:disabled) { background: var(--btn-bg); border-color: transparent; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; }
+.month-chip, .token-insert { border-color: var(--btn-line); }
+#channel-filter .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.week-list .week-item[aria-current="true"] { border-color: var(--accent); }
+
+/* 위쪽 이름 옆의 점 */
+.brand-dot { background: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+
+/* 더하기·빼기 둥근 단추. 그림은 막대 두 개(더하기)나 하나(빼기)로 그린다 */
+.icon-btn { position: relative; flex: 0 0 auto; width: 2rem; height: 2rem; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--btn-line); background: var(--btn-bg); color: var(--ink);
+  transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease); }
+.icon-btn:hover { background: var(--btn-hover); }
+.icon-btn:active { transform: scale(.94); }
+.icon-btn::before, .icon-btn.plus::after { content: ""; position: absolute; left: 50%; top: 50%; width: .8rem; height: 2px; border-radius: 1px;
+  background: currentColor; transform: translate(-50%, -50%); }
+.icon-btn.plus::after { transform: translate(-50%, -50%) rotate(90deg); }
+.icon-btn.minus { color: var(--danger); }
+
+/* 시간대 규칙 줄: 낮게 줄이고, 줄 끝에 빼기, 마지막 줄에만 더하기 */
+.window-rules { gap: .4rem; }
+.window-rule { padding: .3rem .5rem .3rem .8rem; gap: .4rem .8rem; border-radius: var(--radius-input); background: var(--field); border: 0; }
+.window-rule input[type="time"] { min-height: 2.1rem; padding: .25rem .5rem; background: var(--surface); }
+.window-rule .rule-buttons { display: inline-flex; gap: .35rem; margin-left: .4rem; }
+.window-rule:not(:last-child) .rule-add { visibility: hidden; }
+.window-rules:not(:empty) + .window-add-row #window-add { display: none; } /* 규칙이 있으면 더하기는 마지막 줄에 있다 */
+.crumbs { margin: 1rem 0 .7rem; }
+.window-rule select { width: auto; min-height: 2.1rem; padding: .25rem .5rem; background: var(--surface); }
+.window-rule select[data-field="target"] { max-width: 11rem; font-weight: 600; }
+
+/* ================================================================
+   문서 화면(API 안내). 왼쪽에 목차, 오른쪽에 글. 좁은 화면에서는 목차가 위로 온다
+   ================================================================ */
+.wiki-body { background: var(--bg); }
+.wiki-top .brand { color: var(--ink); text-decoration: none; }
+.wiki-crumb { color: var(--muted); font-size: .9rem; flex: 1; }
+.wiki-links { display: flex; gap: .4rem; flex-wrap: wrap; }
+.wiki-links .btn { text-decoration: none; }
+.wiki { max-width: var(--page-max); margin: 0 auto; padding: 2rem var(--gutter) 5rem; display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr); gap: 2.5rem; align-items: start; }
+.wiki-main { max-width: none; margin: 0; padding: 0; min-width: 0; } /* 화면 뼈대의 main 여백을 쓰지 않는다 */
+.wiki-nav { position: sticky; top: 4.5rem; max-height: calc(100vh - 6rem); overflow-y: auto; display: grid; gap: .1rem;
+  padding: 1rem; background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow), 0 0 0 1px var(--edge); }
+.wiki-nav-title { margin: 0 0 .4rem; font-size: .78rem; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.wiki-nav a { display: block; padding: .35rem .6rem; border-radius: var(--radius-small); color: var(--ink); text-decoration: none; font-size: .9rem; }
+.wiki-nav a:hover { background: var(--idle-bg); }
+.wiki-nav a.wiki-nav-3 { padding-left: 1.4rem; color: var(--muted); font-size: .86rem; }
+.wiki-article { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow), 0 0 0 1px var(--edge);
+  padding: 2.25rem 2.5rem 2.75rem; line-height: 1.7; overflow-wrap: anywhere; }
+.wiki-article h1 { margin: 0 0 1rem; }
+.wiki-article h2 { font-size: 1.35rem; margin: 2.75rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid var(--line); scroll-margin-top: 4.5rem; }
+.wiki-article h3 { font-size: 1.05rem; margin: 2rem 0 .8rem; color: var(--ink); scroll-margin-top: 4.5rem; }
+.wiki-article h4.wiki-group { font-size: .92rem; margin: 1.5rem 0 .6rem; color: var(--muted); display: flex; align-items: center; gap: .5rem; }
+.wiki-count { font-size: .75rem; font-weight: 600; padding: .05rem .5rem; border-radius: var(--radius-pill); background: var(--idle-bg); color: var(--muted); }
+.wiki-article p { margin: 0 0 1rem; }
+.wiki-article p.wiki-lead { font-size: 1.02rem; color: var(--muted); }
+.wiki-article ol, .wiki-article ul { margin: 0 0 1rem; padding-left: 1.4rem; display: grid; gap: .45rem; }
+.wiki-article a { color: var(--accent); }
+.wiki-article code { background: var(--field); border-radius: 6px; padding: .1rem .35rem; font-size: .88em; }
+.wiki-code { position: relative; margin: 0 0 1.25rem; border-radius: var(--radius-input); background: var(--field); box-shadow: 0 0 0 1px var(--edge); }
+.wiki-code pre { margin: 0; padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.55; }
+.wiki-code pre code { background: none; padding: 0; font-size: .84rem; white-space: pre; overflow-wrap: normal; }
+.wiki-lang { position: absolute; top: .45rem; right: .7rem; font-size: .72rem; color: var(--muted); font-family: var(--font-mono); }
+.wiki-table { overflow-x: auto; margin: 0 0 1.25rem; border-radius: var(--radius-input); box-shadow: 0 0 0 1px var(--line); }
+.wiki-table table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.wiki-table th { text-align: left; font-size: .78rem; color: var(--muted); font-weight: 600; padding: .6rem .9rem; background: var(--surface-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.wiki-table td { padding: .55rem .9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.wiki-table tr:last-child td { border-bottom: 0; }
+.wiki-table td:first-child { white-space: nowrap; }
+.wiki-table td code { background: none; padding: 0; }
+.wiki-method, .wiki-scope { display: inline-block; min-width: 3.6rem; text-align: center; font-size: .74rem; font-weight: 700; padding: .12rem .5rem;
+  border-radius: var(--radius-pill); font-family: var(--font-mono); letter-spacing: .02em; }
+.wiki-method.m-get { background: var(--ok-bg); color: var(--accent); }
+.wiki-method.m-post { background: var(--live-bg); color: var(--live); }
+.wiki-method.m-put, .wiki-method.m-patch { background: var(--warn-bg); color: var(--warn); }
+.wiki-method.m-delete { background: var(--err-bg); color: var(--err); }
+.wiki-scope { font-family: inherit; min-width: 0; }
+.wiki-scope.s-view { background: var(--idle-bg); color: var(--muted); }
+.wiki-scope.s-operate { background: var(--warn-bg); color: var(--warn); }
+@media (max-width: 860px) {
+  .wiki { grid-template-columns: minmax(0, 1fr); gap: 1rem; padding-top: 1rem; }
+  .wiki-nav { position: static; max-height: none; }
+  .wiki-article { padding: 1.4rem 1.15rem 1.8rem; }
+  .wiki-crumb { display: none; }
+}
+

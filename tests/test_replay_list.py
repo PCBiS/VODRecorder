@@ -709,6 +709,14 @@ def test_select_download_default_quality_duplicate_and_confirm(rl):
     assert state[DASH_NO] == "downloaded" and state[FAST_NO] is None
     found = rl.client.get(LIST, params={"q": "DASH"}).json()["videos"]
     assert found[0]["state"] == "downloaded"  # 검색 결과에도 상태가 붙는다
+    # 채널을 적어 보낸 선택(화면이 이렇게 보낸다)은 작업에 그 채널이 남는다. 채널별 시간대 규칙이 이것을 본다
+    assert "policy_target" not in created[0]
+    r = rl.call("POST", "/api/replay/select", json={"items": [{"video_no": FAST_NO, "title": "채널 표시", "channel_id": CHANNEL}]})
+    assert r.status_code == 200, r.text
+    marked = rl.wait(lambda: [j for j in jobs(rl)["jobs"] if j["url"].endswith(f"/video/{FAST_NO}")], timeout=60, what="채널 표시 작업")
+    assert marked[0]["policy_target"] == f"chzzk:{CHANNEL}"
+    r = rl.call("POST", "/api/replay/select", json={"items": [{"video_no": "777", "title": "모르는 채널", "channel_id": "f" * 32}], "confirm": True})
+    assert r.status_code == 200, r.text  # 등록하지 않은 채널은 표시하지 않는다(전체 규칙을 따른다)
     # 주소로 받기도 같은 규칙이다
     a = analyze(rl, [DASH])
     r = rl.call("POST", "/api/replay/jobs", json={"analysis_id": a["id"], "items": [{"url": DASH, "quality": "PD_90P_160_100_24"}],

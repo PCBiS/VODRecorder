@@ -37,8 +37,10 @@ def engine_activity(engine: Any) -> dict[str, int]:
     return {"recording": max(busy, len(store.open_sessions())), "finalizing": len(store.unfinalized_sessions())}
 
 
-def evaluate(settings: Any, now: datetime, activity: dict[str, int] | None = None, space_low: bool = False) -> dict[str, Any]:
-    """설정·시각·녹화 상태·여유 공간으로 입장 상태를 만든다. 순수 함수다(시험은 시각을 넣어 본다)."""
+def evaluate(settings: Any, now: datetime, activity: dict[str, int] | None = None, space_low: bool = False,
+             target: str | None = None) -> dict[str, Any]:
+    """설정·시각·녹화 상태·여유 공간으로 입장 상태를 만든다. 순수 함수다(시험은 시각을 넣어 본다).
+    target(플랫폼:채널 ID)을 주면 그 채널의 작업에 쓸 상태다: 그 채널의 자기 규칙이 있으면 그것만 따른다."""
     activity = activity or {"recording": 0, "finalizing": 0}
     state: dict[str, Any] = {
         "open": True, "reason": None, "suspend": False,
@@ -47,7 +49,7 @@ def evaluate(settings: Any, now: datetime, activity: dict[str, int] | None = Non
         "end_action": settings.replay_window_end_action,
         "pause_while_recording": bool(settings.replay_pause_while_recording),
         "recording": int(activity.get("recording") or 0), "finalizing": int(activity.get("finalizing") or 0),
-        "closes_at": None, "next_open_at": None, "error": None,
+        "closes_at": None, "next_open_at": None, "error": None, "window_scope": None,
     }
     reasons: list[str] = []
     if state["paused"]:
@@ -56,21 +58,25 @@ def evaluate(settings: Any, now: datetime, activity: dict[str, int] | None = Non
         reasons.append("space")
     if state["pause_while_recording"] and (state["recording"] or state["finalizing"]):
         reasons.append("recording")  # 녹화가 모두 끝나고 마무리까지 끝나야 다시 연다
-    if state["window_enabled"]:
+    rules, own = [], False
+    if state["window_enabled"] or target:
         try:
-            rules = schedule.parse_rules(list(settings.replay_window_rules))
+            rules, own = schedule.rules_for(schedule.parse_rules(list(settings.replay_window_rules)), target)
         except ValueError as exc:
-            rules = []  # 저장된 규칙이 깨졌으면 열지 않는다
-            state["error"] = str(exc)
+            if state["window_enabled"]:  # 저장된 규칙이 깨졌으면 열지 않는다
+                state["error"] = str(exc)
+    if state["window_enabled"] or own:  # 채널의 자기 규칙은 시간대 사용 설정과 상관없이 따른다
+        state["window_scope"] = "channel" if own else "all"
         window = schedule.window_state(rules, now)
         state["closes_at"] = window.closes_at.isoformat() if window.closes_at else None
         state["next_open_at"] = window.next_open_at.isoformat() if window.next_open_at else None
+        state["end_action"] = schedule.end_action(rules, now) or state["end_action"]  # 규칙마다 둔 끝 동작이 전체 설정보다 먼저다
         if not window.open:
             reasons.append("window")
     if reasons:
         reason = reasons[0]
         state.update(open=False, reason=reason,
-                     suspend=reason != "window" or settings.replay_window_end_action == "pause")
+                     suspend=reason != "window" or state["end_action"] == "pause")
     state["reasons"] = reasons
     state["reason_label"] = REASON_LABELS.get(state["reason"]) if state["reason"] else None
     return state

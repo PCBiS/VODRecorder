@@ -270,24 +270,27 @@ class ReplayManager:
             raise ReplayError(409, '이미 받았거나 대기·진행 중인 영상이 있습니다. 확인한 뒤 다시 요청하십시오',
                               {'duplicates': titles[:MAX_SELECT]})
 
-    async def select_download(self, owner, entries, confirm=False):
+    async def select_download(self, owner, entries, confirm=False, targets=None):
         """고른 영상(주소, 제목)을 분석한 뒤 기본 화질(best)로 작업을 만든다. 분석·다운로드는 하나씩 차례로.
         목록(채널 다시보기)에서 고르는 일은 그 종류를 내놓은 확장이 하고 주소만 넘긴다(downloads 공개 접점)."""
         self._available()
         if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_SELECT:
             raise ReplayError(400, f'한 번에 1~{MAX_SELECT}개를 고르십시오.')
-        urls, titles = [], []
-        for url, title in entries:
+        urls, titles, marks = [], [], []
+        for index, (url, title) in enumerate(entries):
             url = parse_url(url)[0]['url']
             if url not in urls:
                 urls.append(url)
                 titles.append(clean_text(title, 300))
+                # 채널 목록에서 고른 영상은 그 채널(플랫폼:채널 ID)을 적어 둔다. 채널별 시간대 규칙이 이것을 본다
+                mark = targets[index] if isinstance(targets, list) and index < len(targets) else None
+                marks.append(mark if isinstance(mark, str) and len(mark) <= 130 else None)
         self._check_duplicates([(video_key(u), t) for u, t in zip(urls, titles)], confirm)
         self._capacity(owner, len(urls))
         if self.db.execute("SELECT count(*) FROM records WHERE kind='analysis' AND status IN ('queued','running')").fetchone()[0] >= 20:
             raise ReplayError(429, '분석 대기열이 가득 찼습니다.')
         data = {'id': uuid.uuid4().hex, 'status': 'queued', 'items': [], '_urls': urls,
-                '_auto': {'titles': titles, 'quality': 'best'}, 'created_at': now(), 'updated_at': now(),
+                '_auto': {'titles': titles, 'quality': 'best', 'targets': marks}, 'created_at': now(), 'updated_at': now(),
                 'error': None, 'warnings': []}
         self._save('analysis', owner, data)
         self.wake['analysis'].set()
@@ -302,6 +305,7 @@ class ReplayManager:
         from ...core.quality import Track, select
         rule = analysis['_auto'].get('quality', 'best')
         titles = dict(zip(analysis['_urls'], analysis['_auto'].get('titles', [])))
+        marks = dict(zip(analysis['_urls'], analysis['_auto'].get('targets') or []))
         jobs, failed = [], []
         for item in analysis['items']:
             title = item.get('title') or titles.get(item.get('url')) or item.get('url') or ''
@@ -319,6 +323,11 @@ class ReplayManager:
                                                     ERROR_MESSAGES['engine_operation_failed']))
                 continue
             jobs.append(self._new_job(spec))
+            if marks.get(item.get('url')):
+                jobs[-1]['policy_target'] = marks[item['url']]
+        for job in failed:
+            if marks.get(job.get('url')):
+                job['policy_target'] = marks[job['url']]
         with self.db:
             for job in jobs + failed:
                 self.store.save('job', owner, job)
@@ -398,13 +407,14 @@ class ReplayManager:
         return paths
 
     # ---- 입장과 일시정지 ----
-    def gate(self, need=None):
+    def gate(self, need=None, target=None):
         """지금의 입장 상태. 여유 공간(최소 여유 공간)은 관리자가 잰다.
+        target(작업의 `policy_target`)을 주면 그 채널의 시간대 규칙으로 따진 상태다.
 
         여유 공간 판단에는 받는 방식이 더 쓸 공간(need)을 더한다. HLS형은 조각과 담은 결과가 함께 있어
         영상 크기의 두 배가 든다. 크기를 모르면 더하지 않는다. need를 주지 않으면 받는 중이거나 차례를 기다리는 작업의 몫을 쓴다."""
         try:
-            state = dict(self.admission())
+            state = dict(self.admission(target) if target else self.admission())
         except Exception:  # noqa: BLE001 - 판단에 실패하면 열지 않는다
             state = dict(adm.open_state(), open=False, reason='global', suspend=False, error='입장 상태를 읽지 못했습니다')
         if need is None:
@@ -931,7 +941,7 @@ class ReplayManager:
                     if reason is None:
                         if 'estimate' in reported:  # HLS형은 영상 크기의 두 배가 든다
                             self.reserve[ident] = max(0, 2 * reported['estimate'] - reported.get('bytes', 0))
-                        state = self.gate(self.reserve.get(ident, 0))
+                        state = self.gate(self.reserve.get(ident, 0), data.get('policy_target'))
                         if state['suspend']:
                             reason = self.suspend_requests[ident] = state['reason']
                     if reason is not None:
@@ -1107,24 +1117,30 @@ class ReplayManager:
             return self.db.execute("SELECT owner,payload FROM records WHERE kind='analysis' AND status='queued' ORDER BY json_extract(payload,'$.updated_at'), rowid LIMIT 1").fetchone()
         # 입장이 닫혀 있으면 새 작업을 시작하지 않는다. 열리면 대기열 순서대로(넣은 시각) 시작한다.
         # 사용자가 아닌 이유로 일시정지한 작업과 재개한 작업(queue)도 같은 순서로 다시 시작한다
-        if not self.gate(0)['open']:
-            return None
         # 꺼진 확장의 작업은 대기열에 남기고 시작하지 않는다(다시 켜면 이어서 진행한다)
         active = [k.kind for k in api.kinds()]
         if not active:
             return None
-        row = self.db.execute(
+        rows = self.db.execute(
             "SELECT owner,payload FROM records WHERE kind='job' AND (status='queued' OR (status='paused' AND "
             "COALESCE(json_extract(payload,'$.pause_reason'),'') != 'user')) "
             f"AND COALESCE(json_extract(payload,'$.kind'),'video') IN ({','.join('?' * len(active))}) "
-            "ORDER BY COALESCE(json_extract(payload,'$.queued_at'), json_extract(payload,'$.updated_at')), rowid LIMIT 1",
-            active).fetchone()
-        # 크기를 아는 HLS형(이어받을 작업)은 앞으로 쓸 공간까지 있어야 시작한다. 모르면 0이다
-        self.claim_need = self.space_need(json.loads(row['payload'])) if row is not None else 0
-        if self.claim_need and not self.gate(self.claim_need)['open']:
-            return None
+            "ORDER BY COALESCE(json_extract(payload,'$.queued_at'), json_extract(payload,'$.updated_at')), rowid LIMIT 200",
+            active).fetchall()
+        # 대기열 순서대로 본다. 시간대는 작업의 채널마다 다를 수 있어(채널에 자기 규칙이 있으면 그것을 따른다)
+        # 시간대 밖인 작업은 건너뛰고 다음 작업을 본다. 다른 이유(전체 정지·여유 공간·녹화 중)로 닫혀 있으면 아무것도 시작하지 않는다
+        for row in rows:
+            job = json.loads(row['payload'])
+            # 크기를 아는 HLS형(이어받을 작업)은 앞으로 쓸 공간까지 있어야 시작한다. 모르면 0이다
+            self.claim_need = self.space_need(job)
+            state = self.gate(self.claim_need, job.get('policy_target'))
+            if state['open']:
+                self.claim_need = 0
+                return row
+            if state.get('reason') != 'window':
+                return None  # 기다리는 몫(claim_need)은 남겨 둔다: 상태 조회가 여유 공간 부족을 같은 값으로 보인다
         self.claim_need = 0
-        return row
+        return None
 
     async def _loop(self, kind):
         while not self.stopping:

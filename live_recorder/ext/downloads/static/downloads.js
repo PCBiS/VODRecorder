@@ -324,9 +324,54 @@ function windowRuleRow(rule) {
   start.value = r.start;
   const end = el("input", { type: "time", required: true, "aria-label": "끝", dataset: { field: "end" } });
   end.value = r.end;
-  const row = el("div", { class: "window-rule" }, days, start, el("span", { text: "–" }), end);
-  row.append(el("button", { class: "btn small ghost", type: "button", text: "삭제", onclick: () => row.remove() }));
+  // 규칙마다 그 시간대가 끝날 때 받는 중인 작업을 어떻게 할지 고른다. 새 줄은 전체 설정(규칙이 없을 때 보이는 고르기)을 물려받는다
+  const action = el("select", { "aria-label": "시간대가 끝날 때 받는 중인 작업", title: "이 시간대가 끝날 때 받는 중인 작업", dataset: { field: "end_action" } },
+    el("option", { value: "pause", text: "다음에 이어받기" }),
+    el("option", { value: "finish", text: "끝까지 받기" }));
+  action.value = r.end_action || defaultEndAction();
+  // 대상: 전체이거나 다운로드 화면에 등록한 채널 하나. 채널을 고른 규칙은 그 채널의 작업에만 쓰고, 전체 규칙보다 먼저다
+  const target = el("select", { "aria-label": "이 규칙의 대상", dataset: { field: "target" } });
+  fillTargetOptions(target, r.target || "");
+  target.addEventListener("change", () => showWindowNow());
+  const row = el("div", { class: "window-rule" }, target, days, start, el("span", { text: "–" }), end, action);
+  // 줄마다 빼기(이 규칙 삭제), 마지막 줄에만 더하기(새 규칙)가 보인다
+  row.append(el("span", { class: "rule-buttons" },
+    el("button", { class: "icon-btn minus", type: "button", title: "이 규칙 삭제", "aria-label": "이 규칙 삭제", onclick: () => { row.remove(); showWindowNow(); } }),
+    el("button", { class: "icon-btn plus rule-add", type: "button", title: "규칙 더하기", "aria-label": "규칙 더하기", onclick: addWindowRule })));
   return row;
+}
+
+// 규칙의 대상으로 고를 수 있는 채널(다운로드 화면에 등록한 채널). 값은 "플랫폼:채널 ID"
+let windowChannels = [];
+
+function fillTargetOptions(select, value) {
+  const many = new Set(windowChannels.map((c) => c.platform)).size > 1;
+  const options = [el("option", { value: "", text: "전체" }),
+    ...windowChannels.map((c) => el("option", { value: `${c.platform}:${c.channel_id}`,
+      text: many ? `${c.name} · ${c.platform_name || c.platform}` : c.name }))];
+  if (value && !windowChannels.some((c) => `${c.platform}:${c.channel_id}` === value)) {
+    options.push(el("option", { value, text: "지운 채널" })); // 저장된 규칙의 채널이 목록에 없다. 값은 그대로 둔다
+  }
+  select.replaceChildren(...options);
+  select.value = value;
+}
+
+async function loadWindowChannels() {
+  // 채널 목록을 내는 확장이 꺼져 있으면(목록 보기가 없다) 묻지 않고 전체만 고른다
+  const data = DOWNLOAD_MODES.length ? await api("GET", "/api/replay/channels").catch(() => null) : null;
+  windowChannels = data && Array.isArray(data.channels) ? data.channels : [];
+  for (const select of document.querySelectorAll('#window-rules [data-field="target"]')) fillTargetOptions(select, select.value);
+}
+
+function defaultEndAction() {
+  const picked = document.querySelector('[name="replay_window_end_action"]:checked');
+  return picked && picked.value === "finish" ? "finish" : "pause";
+}
+
+function addWindowRule() {
+  if ($("window-rules").children.length >= WINDOW_MAX) { toast(`규칙은 ${WINDOW_MAX}개까지입니다`, true); return; }
+  $("window-rules").append(windowRuleRow());
+  showWindowNow();
 }
 
 function collectWindowRules() {
@@ -334,6 +379,8 @@ function collectWindowRules() {
     days: Array.from(row.querySelectorAll(".days input:checked")).map((box) => Number(box.value)),
     start: row.querySelector("[data-field=start]").value,
     end: row.querySelector("[data-field=end]").value,
+    end_action: row.querySelector("[data-field=end_action]").value,
+    ...(row.querySelector("[data-field=target]").value ? { target: row.querySelector("[data-field=target]").value } : {}),
   }));
 }
 
@@ -342,13 +389,38 @@ function seoulClock(iso) {
   return formatWhen(iso);
 }
 
+async function refreshWindowNow() {
+  const st = await api("GET", "/api/replay/status").catch(() => null);
+  showWindowNow(st ? st.admission : undefined);
+}
+
+// 안내 글은 저장된 상태(gate)와 지금 화면의 체크·규칙 줄을 함께 본다. gate를 주지 않으면 마지막에 받은 것을 쓴다
+let windowGate = null;
 function showWindowNow(gate) {
-  let text = "시간대를 쓰지 않습니다. 언제든 받습니다.";
-  if (gate && gate.window_enabled) {
-    if (gate.error) text = `저장된 규칙을 읽지 못해 받지 않습니다: ${gate.error}`;
-    else if (gate.reasons && gate.reasons.includes("window")) text = `지금은 시간대 밖입니다.${gate.next_open_at ? ` ${seoulClock(gate.next_open_at)}에 시작한다.` : ""}`;
-    else text = `지금은 시간대 안입니다.${gate.closes_at ? ` ${seoulClock(gate.closes_at)}까지.` : ""}`;
+  if (gate !== undefined) windowGate = gate;
+  const g = windowGate;
+  const targets = Array.from($("window-rules").querySelectorAll('[data-field="target"]')).map((s) => s.value);
+  const rows = targets.filter((value) => !value).length; // 대상이 전체인 규칙. 시간대 사용 체크는 이 규칙에만 쓴다
+  const own = targets.length - rows; // 채널을 지정한 규칙. 체크와 상관없이 그 채널에 쓴다
+  $("window-end-default").hidden = targets.length > 0; // 규칙이 있으면 끝 동작은 규칙 줄마다 고른다
+  const box = document.querySelector('[name="replay_window_enabled"]');
+  const checked = Boolean(box && box.checked);
+  let text;
+  if (checked && !rows) {
+    text = "대상이 전체인 규칙을 하나 이상 더하십시오.";
+  } else if (g && g.window_enabled && checked) {
+    if (g.error) text = `저장된 규칙을 읽지 못해 받지 않습니다: ${g.error}`;
+    else if (g.reasons && g.reasons.includes("window")) text = `지금은 시간대 밖입니다.${g.next_open_at ? ` ${seoulClock(g.next_open_at)}에 시작합니다.` : ""}`;
+    else text = `지금은 시간대 안입니다.${g.closes_at ? ` ${seoulClock(g.closes_at)}까지.` : ""}`;
+  } else if (g && g.window_enabled) {
+    text = "저장하면 시간대를 쓰지 않고 언제든 받습니다.";
+  } else if (checked) {
+    text = "저장하면 대상이 전체인 규칙의 시간에만 새 다운로드를 시작합니다.";
+  } else {
+    text = rows ? "대상이 전체인 규칙이 있지만 시간대 사용이 꺼져 있어 지금은 언제든 받습니다. 위의 체크를 켜고 저장하면 규칙을 씁니다."
+      : "시간대를 쓰지 않습니다. 언제든 받습니다.";
   }
+  if (own) text += " 채널을 지정한 규칙은 위의 체크와 상관없이 그 채널에서 받는 작업에 쓰고, 전체 규칙보다 먼저입니다(채널 목록에서 골라 받은 작업).";
   $("window-now").textContent = text;
 }
 
@@ -378,15 +450,12 @@ registerSettingsPart("replay", {
     f.replay_window_end_action.value = s.replay_window_end_action;
     $("window-rules").replaceChildren(...s.replay_window_rules.map(windowRuleRow));
     for (const n of f.querySelectorAll("[data-ext-setting]")) if (s[n.dataset.extSetting] != null) n.value = s[n.dataset.extSetting];
+    refreshWindowNow(); // 저장한 뒤에도 안내 글이 새 상태를 따른다
   },
-  async load() {
-    const st = await act(() => api("GET", "/api/replay/status"));
-    if (st) showWindowNow(st.admission);
-  },
+  load() { refreshWindowNow(); loadWindowChannels(); },
   bind() {
-    $("window-add").addEventListener("click", () => {
-      if ($("window-rules").children.length >= WINDOW_MAX) { toast(`규칙은 ${WINDOW_MAX}개까지입니다`, true); return; }
-      $("window-rules").append(windowRuleRow());
-    });
+    $("window-add").addEventListener("click", addWindowRule);
+    const windowBox = document.querySelector('[name="replay_window_enabled"]');
+    if (windowBox) windowBox.addEventListener("change", () => showWindowNow());
   },
 });

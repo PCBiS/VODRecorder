@@ -3,6 +3,7 @@
 - `GET/POST /api/keys`, `DELETE /api/keys/{key_id}`: 관리자(로그인한 세션)만. 키로는 열리지 않는다.
 - `GET /api/openapi.json`: 키로 열 수 있는 경로만 담은 기계용 문서. 접근 규칙 표와 경로 정의에서 만든다.
 - `GET /api/guide`: 사람과 AI용 안내 글(마크다운). 저장소의 `docs/API.md`와 같은 글이다(시험이 견준다).
+  브라우저(Accept에 text/html)가 열면 같은 글을 목차가 있는 문서 화면으로 보인다. `?format=md`면 늘 원문이다.
 """
 
 from __future__ import annotations
@@ -13,12 +14,13 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, StrictStr
 
 from ... import PROGRAM_NAME, __version__
 from ...core import apikeys
 from ..access import KEY_NONE, KEY_OPERATE
+from ..guide_page import render as render_guide
 
 log = logging.getLogger("live_recorder.web")
 
@@ -132,8 +134,12 @@ def build(ctx) -> APIRouter:
         return cache["doc"]
 
     @r.get("/api/guide")
-    async def guide():
-        return PlainTextResponse(GUIDE.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
+    async def guide(request: Request, format: str | None = None):
+        text = GUIDE.read_text(encoding="utf-8")
+        # 브라우저로 열면 문서 화면, 프로그램(curl, AI 도구 등)이 받으면 원문 그대로
+        if format != "md" and "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse(render_guide(text, PROGRAM_NAME))
+        return PlainTextResponse(text, media_type="text/markdown; charset=utf-8")
 
     return r
 

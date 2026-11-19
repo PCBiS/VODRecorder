@@ -35,7 +35,7 @@ def ratio(a: str, b: str) -> float:
 
 
 # (글자, 바탕): 본문, 흐린 글자, 강조색 글자, 강조 단추 글자, 경고·오류 글자, 선택한 탭, 채널 카드 위 글자, 상태 배지
-PAIRS = [("--ink", "--surface"), ("--ink", "--bg"), ("--muted", "--surface"), ("--muted", "--bg"), ("--muted", "--idle-bg"),
+PAIRS = [("--ink", "--surface"), ("--ink", "--bg"), ("--ink", "--btn-bg"), ("--ink", "--btn-hover"), ("--danger", "--btn-bg"), ("--muted", "--surface"), ("--muted", "--bg"), ("--muted", "--idle-bg"),
          ("--muted", "--field"), ("--ink", "--field"),
          ("--accent", "--surface"), ("--accent", "--bg"), ("--accent", "--ok-bg"), ("--accent-ink", "--accent"),
          ("--danger", "--surface"), ("--danger-ink", "--danger"), ("--warn", "--warn-bg"), ("--rec", "--rec-bg"),

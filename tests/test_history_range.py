@@ -112,3 +112,17 @@ def test_time_column_fits_the_chosen_date_shape():
     assert ".section-head h2, .section-head .seg { margin-top: 0; margin-bottom: 0; }" in css
     downloads = (UI.parent / "ext" / "downloads" / "static" / "downloads.js").read_text()
     assert '$("jobs-cancel-all").disabled = !data.counts.active;' in downloads
+
+
+def test_spacing_rules_are_shared():
+    """간격은 한곳의 규칙으로 정한다: 입력 칸 높이, 격자 간격, 저장 단추 줄. 저장 단추 줄은 모두 form-actions를 쓴다."""
+    import re
+
+    css = (UI / "style.css").read_text()
+    assert "input:not([type=checkbox]):not([type=radio]):not([type=file]), select { min-height: 2.75rem; }" in css
+    assert ".form-actions { margin-top: 1.5rem; }" in css and ".grid > label, .events > label, .grid > fieldset { margin: 0; }" in css
+    pages = [UI / "index.html"] + sorted((UI.parent / "ext").glob("*/ui/*.html"))
+    for page in pages:
+        html = page.read_text()
+        for m in re.finditer(r'<div class="([^"]*)">\s*<button class="btn primary"[^>]*type="submit"', html):
+            assert "form-actions" in m.group(1), (page.name, m.group(0)[:80])

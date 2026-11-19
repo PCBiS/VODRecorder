@@ -121,7 +121,7 @@
       <p id="cookie-last" class="muted"></p>
       <form id="cookie-form" autocomplete="off">
         <div id="cookie-fields"></div>
-        <div class="row">
+        <div class="row form-actions">
           <button class="btn primary" type="submit">저장</button>
           <button class="btn" type="button" id="cookie-check">쿠키 확인</button>
           <button class="btn danger" type="button" id="cookie-clear">지우기</button>
@@ -135,7 +135,7 @@
       <p class="muted">브라우저 확장(예: Get cookies.txt LOCALLY)으로 내보낸 Netscape cookies.txt나 JSON 파일을 고르거나 내용을 붙여 넣으십시오. 해당 사이트의 쿠키만 내보내는 것을 권합니다. 모든 사이트의 쿠키가 든 파일을 올려도 필요한 쿠키만 쓰고 나머지는 버립니다. 올린 파일 자체는 저장하지 않습니다. <span id="cookie-upload-extra"></span></p>
       <label>파일<input type="file" id="cookie-upload-file" accept=".txt,.json,text/plain,application/json"></label>
       <label>또는 내용 붙여 넣기<textarea id="cookie-upload-text" rows="4" spellcheck="false" placeholder="파일 내용(256KB 이하)"></textarea></label>
-      <div class="row"><button class="btn primary" type="submit">쿠키 파일 올리기</button><span id="cookie-upload-result" class="muted"></span></div>
+      <div class="row form-actions"><button class="btn primary" type="submit">쿠키 파일 올리기</button><span id="cookie-upload-result" class="muted"></span></div>
     </form>
   </section>
 
@@ -158,7 +158,7 @@
       <div id="settings-timemachine">
       <h2>타임머신</h2>
       <div class="grid">
-        <label class="check"><input name="timemachine_enabled" type="checkbox">방송 앞부분부터 녹화</label>
+        <label class="check beside"><input name="timemachine_enabled" type="checkbox">방송 앞부분부터 녹화</label>
         <label>되감기(초, 0~3600)<input name="rewind_seconds" type="number" min="0" max="3600"></label>
         <p id="rewind-note" class="muted field-note span2" hidden></p>
       </div>
@@ -195,7 +195,7 @@
       </div>
       <p class="muted filename-help">시각은 24시간제, 한국 시각입니다. 바꾼 모양은 다음에 만드는 파일부터 쓰고, 이미 있는 파일과 녹화 중인 파일의 이름은 그대로입니다. 초가 없는 모양에서 이름이 겹치면 뒤에 번호가 붙습니다.</p>
       <p class="filename-example">예시: <code id="filename-example"></code></p>
-      <div class="row">
+      <div class="row form-actions">
         <button class="btn primary" type="submit">이 탭 저장</button>
         <span id="settings-result" class="muted" data-result></span>
       </div>
@@ -212,11 +212,11 @@
     <form id="settings-notify-form" class="panel" data-part="notify" autocomplete="off">
       <h2>텔레그램 알림</h2>
       <div class="grid">
-        <label class="check"><input name="notify_enabled" type="checkbox">알림 사용</label>
+        <label class="check beside"><input name="notify_enabled" type="checkbox">알림 사용</label>
         <label>같은 알림 다시 보내지 않는 시간(초, 0이면 끔)<input name="notify_dedupe_seconds" type="number" min="0" max="86400"></label>
       </div>
       <div id="event-list" class="events"></div>
-      <div class="row">
+      <div class="row form-actions">
         <button class="btn primary" type="submit">이 탭 저장</button>
         <span id="settings-notify-result" class="muted" data-result></span>
       </div>
@@ -229,7 +229,7 @@
         <label>봇 토큰<input name="bot_token" type="password" autocomplete="off" placeholder="바꿀 때만 입력"></label>
         <label>chat_id<input name="chat_id" type="password" autocomplete="off" placeholder="바꿀 때만 입력"></label>
       </div>
-      <div class="row">
+      <div class="row form-actions">
         <button class="btn primary" type="submit">저장</button>
         <button class="btn" type="button" id="tg-test">테스트 전송</button>
         <span id="tg-result" class="muted"></span>
@@ -241,11 +241,11 @@
       <h2>로그인</h2>
       <div class="grid">
         <label>세션 유지(분, 쓰지 않은 시간. 0이면 제한 없음)<input name="session_minutes" type="number" min="0"></label>
-        <label class="check"><input name="login_limit_enabled" type="checkbox">로그인 실패 횟수 제한</label>
+        <label class="check beside"><input name="login_limit_enabled" type="checkbox">로그인 실패 횟수 제한</label>
         <label class="span2">신뢰할 프록시 주소(IP나 CIDR, 한 줄에 하나. 비우면 X-Forwarded-For를 읽지 않습니다)
           <textarea name="trusted_proxies" rows="2" spellcheck="false"></textarea></label>
       </div>
-      <div class="row">
+      <div class="row form-actions">
         <button class="btn primary" type="submit">이 탭 저장</button>
         <span id="settings-account-result" class="muted" data-result></span>
       </div>
@@ -260,7 +260,7 @@
         <label>새 비밀번호 확인<input name="confirm" type="password" autocomplete="new-password" required data-pw-input></label>
       </div>
       <label class="check"><input name="revoke_keys" type="checkbox">접근 키도 모두 폐기(비밀번호가 새어 나갔다고 의심될 때)</label>
-      <div class="row"><button class="btn primary" type="submit">비밀번호 변경</button><span id="password-result" class="muted"></span></div>
+      <div class="row form-actions"><button class="btn primary" type="submit">비밀번호 변경</button><span id="password-result" class="muted"></span></div>
     </form>
     <section id="apikeys-group" class="panel" hidden>
       <h2>접근 키</h2>
@@ -270,7 +270,7 @@
         <label>이름<input name="name" maxlength="40" required></label>
         <label>권한<select name="scope"><option value="view">보기</option><option value="operate">운영</option></select></label>
         <label>만료<select name="expiry"><option value="none">없음</option><option value="30d">30일</option><option value="90d">90일</option><option value="1y">1년</option></select></label>
-        <div class="row"><button class="btn primary" type="submit">발급</button><span id="apikeys-result" class="muted"></span></div>
+        <div class="row form-actions"><button class="btn primary" type="submit">발급</button><span id="apikeys-result" class="muted"></span></div>
       </form>
       <div id="apikeys-new" class="field-note" hidden>
         <p><strong>새 키</strong>: 이 값은 지금만 보입니다. 다시 볼 수 없으니 안전한 곳에 적어 두십시오.</p>
@@ -301,7 +301,7 @@
         <label class="span2">추가 허용 루트(절대 경로, 한 줄에 하나. 채널<!-- lr-slot:fm-roots --> 폴더는 자동으로 들어갑니다)
           <textarea name="fm_roots" rows="2" spellcheck="false"></textarea></label>
       </div>
-      <div class="row">
+      <div class="row form-actions">
         <button class="btn primary" type="submit">이 탭 저장</button>
         <span id="settings-general-result" class="muted" data-result></span>
       </div>
@@ -315,7 +315,7 @@
         </select></label>
         <label class="check"><input id="export-strict" name="strict" type="checkbox">더 가리기(채널·제목·파일 이름을 익명화합니다)</label>
       </div>
-      <div class="row"><button class="btn primary" id="export-button" type="submit">로그 내려받기</button><span id="export-result" class="muted"></span></div>
+      <div class="row form-actions"><button class="btn primary" id="export-button" type="submit">로그 내려받기</button><span id="export-result" class="muted"></span></div>
       <p id="export-info" class="muted field-note export-info">채널 이름·방송 제목·파일 이름이 들어갑니다. 쿠키·비밀번호·토큰·접속 주소는 들어가지 않습니다. 무엇이 들어가는지는 프로그램 저장소의 <code>docs/LOG-EXPORT.md</code> 문서에 있습니다. 공개된 곳에 올리면 누구나 볼 수 있으니, 꺼려지면 "더 가리기"를 켜거나 올리기 전에 zip을 직접 열어 확인하십시오.</p>
     </form>
     <!-- 켜야 쓰는 플랫폼(예: 외부 도구가 필요한 플랫폼)의 켜기·끄기. 그런 플랫폼이 없으면 보이지 않는다 -->
@@ -328,7 +328,7 @@
       <form id="extensions-form" autocomplete="off">
         <div id="extensions-list" class="grid"></div>
         <p id="extensions-note" class="muted"></p>
-        <div class="row"><button class="btn primary" type="submit">확장 설정 저장</button></div>
+        <div class="row form-actions"><button class="btn primary" type="submit">확장 설정 저장</button></div>
       </form>
     </section>
     </div>
@@ -349,7 +349,7 @@
     </div>
     <label class="check"><input name="auto_record" type="checkbox" checked>자동 녹화</label>
     <p id="channel-error" class="form-error" role="alert" hidden></p>
-    <div class="row end">
+    <div class="row end form-actions">
       <button class="btn danger push-left" type="button" id="channel-delete" hidden>채널 삭제</button>
       <button class="btn" type="button" id="channel-cancel">취소</button>
       <button class="btn primary" type="submit">저장</button>
@@ -364,7 +364,7 @@
   </div>
   <div id="week-list" class="week-list" role="group" aria-label="주차"></div>
   <p id="week-note" class="muted field-note"></p>
-  <div class="row end">
+  <div class="row end form-actions">
     <button class="btn" type="button" id="week-cancel">닫기</button>
   </div>
 </dialog>

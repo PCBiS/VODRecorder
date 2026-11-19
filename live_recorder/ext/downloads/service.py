@@ -40,7 +40,7 @@ class ReplayService:
         # 녹화 엔진의 상태를 읽기만 하는 함수(admission.engine_activity). 없으면 녹화가 없는 것으로 본다
         self.activity = activity or (lambda: {"recording": 0, "finalizing": 0})
         self.clock = clock or (lambda: datetime.now(timezone.utc))  # 시험은 시계를 바꿔 넣는다
-        self._admission: tuple[float, dict[str, Any]] | None = None
+        self._admission: dict[str | None, tuple[float, dict[str, Any]]] = {}  # 대상(None은 전체) → (잰 때, 상태)
         self.get_settings = get_settings
         self.worker_command = worker_command
         self.disk_free = disk_free
@@ -77,11 +77,13 @@ class ReplayService:
                              low_priority=lambda: self.get_settings().finalize_low_priority,
                              admission=self.admission, request_gate=self.request_gate)
 
-    def admission(self) -> dict[str, Any]:
-        """전체 일시정지·녹화 중·시간대로 정한 입장 상태(여유 공간은 관리자가 더한다). 1초 동안 다시 쓴다."""
+    def admission(self, target: str | None = None) -> dict[str, Any]:
+        """전체 일시정지·녹화 중·시간대로 정한 입장 상태(여유 공간은 관리자가 더한다). 1초 동안 다시 쓴다.
+        target(플랫폼:채널 ID)을 주면 그 채널의 작업에 쓸 상태다."""
         moment = time.monotonic()
-        if self._admission is not None and moment - self._admission[0] < 1.0:
-            return self._admission[1]
+        cached = self._admission.get(target)
+        if cached is not None and moment - cached[0] < 1.0:
+            return cached[1]
         settings = self.get_settings()
         activity = None
         if settings.replay_pause_while_recording:
@@ -89,13 +91,15 @@ class ReplayService:
                 activity = self.activity()
             except Exception:  # noqa: BLE001 - 녹화 상태를 모르면 녹화 중으로 본다(녹화를 방해하지 않는 쪽)
                 activity = {"recording": 1, "finalizing": 0}
-        state = admission.evaluate(settings, self.clock(), activity)
-        self._admission = (moment, state)
+        state = admission.evaluate(settings, self.clock(), activity, target=target)
+        if len(self._admission) > 200:
+            self._admission.clear()
+        self._admission[target] = (moment, state)
         return state
 
     def poke(self) -> None:
         """설정을 바꾼 뒤: 입장 상태를 바로 다시 따지고 대기열을 깨운다."""
-        self._admission = None
+        self._admission.clear()
         if self.manager is not None:
             self.manager.wake["job"].set()
 

@@ -364,6 +364,15 @@ def test_openapi_lists_exactly_the_key_routes(site):
 def test_guide_matches_routes_and_has_no_internal_details(site):
     guide = (ROOT / "docs" / "API.md").read_text(encoding="utf-8")
     assert site.client.get("/api/guide").text == guide
+    # 브라우저(Accept: text/html)로 열면 같은 글이 문서 화면으로 나온다. ?format=md면 원문이다
+    page = site.client.get("/api/guide", headers={"Accept": "text/html,application/xhtml+xml"})
+    assert page.status_code == 200 and page.headers["content-type"].startswith("text/html")
+    assert 'class="wiki-nav"' in page.text and "<script>" not in page.text and 'href="#s1"' in page.text
+    assert page.text.count('class="wiki-method') == len(re.findall(r"^\| (?:GET|POST|PUT|PATCH|DELETE) \|", guide, re.M))
+    for heading in re.findall(r"^## (.+)$", guide, re.M):
+        assert f">{heading}</h2>" in page.text, heading
+    assert "&lt;채널ID&gt;" in page.text and "<채널ID>" not in page.text  # 글자는 HTML로 바꿔 넣는다
+    assert site.client.get("/api/guide?format=md", headers={"Accept": "text/html"}).text == guide
     assert (ROOT / "live_recorder" / "web" / "api_guide.md").read_text(encoding="utf-8") == guide
     rows = set(re.findall(r"^\| (GET|POST|PUT|PATCH|DELETE) \| (\S+) \| (보기|운영) \|$", guide, re.M))
     access = site.app.state.access

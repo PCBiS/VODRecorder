@@ -261,9 +261,10 @@ class Downloads:
         manager = self._service.manager
         return manager.video_states(keys) if manager else {}
 
-    async def select(self, owner: str, entries: list[tuple[str, str]], confirm: bool = False) -> dict[str, Any]:
-        """(주소, 제목) 목록을 분석한 뒤 기본 화질로 작업을 만든다."""
-        return await self._service.require().select_download(owner, entries, confirm)
+    async def select(self, owner: str, entries: list[tuple[str, str]], confirm: bool = False,
+                     targets: list[str | None] | None = None) -> dict[str, Any]:
+        """(주소, 제목) 목록을 분석한 뒤 기본 화질로 작업을 만든다. targets는 entries와 같은 순서의 채널 표기(없으면 None)."""
+        return await self._service.require().select_download(owner, entries, confirm, targets)
 
     def recording_channels(self) -> list[tuple[str, str]]:
         return self._service.recording_channels() if self._service.recording_channels else []

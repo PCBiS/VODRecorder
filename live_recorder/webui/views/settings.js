@@ -390,7 +390,7 @@ function gateRow(p) {
   const gapWarn = warn(g.warnings.gap);
   const cycle = el("p", { class: "muted field-note", text: `지금 감시 중인 채널 ${g.channels}개: 한 바퀴 약 ${g.cycle}초${g.note ? ` · ${g.note}` : ""}` });
   const result = el("span", { class: "muted" });
-  const save = el("button", { class: "btn small", type: "button", text: "저장", onclick: async () => {
+  const save = el("button", { class: "btn primary", type: "button", text: "저장", onclick: async () => {
     const body = { scan: Number(scan.value), gap: Number(gap.value) };
     // 경고 범위로 저장하려 하면 확인을 받는다
     if ((body.scan <= 30 || body.gap < 5) && !confirm(p.gate_warning)) return;
@@ -401,7 +401,7 @@ function gateRow(p) {
     el("h3", { text: p.name }),
     el("div", { class: "grid" }, el("label", {}, "스캔 주기(초, 10~3600)", scan, scanWarn),
       el("label", {}, "채널 사이 간격(초, 1~600)", gap, gapWarn)),
-    cycle, el("div", { class: "row" }, save, result));
+    cycle, el("div", { class: "row form-actions" }, save, result));
 }
 
 // ---- 켜야 쓰는 플랫폼 ----
@@ -429,7 +429,7 @@ function optInRow(p) {
   return el("div", { class: "optin-row", dataset: { optin: p.id } },
     el("h3", { text: p.name }),
     el("p", { class: "muted", text: status }),
-    el("div", { class: "row" }, p.enabled ? disable : (n.blocked ? null : enable), result));
+    el("div", { class: "row form-actions" }, p.enabled ? disable : (n.blocked ? null : enable), result));
 }
 
 // 고지 창. 동의하면 서버가 자체 점검을 하고 통과해야 켜진다

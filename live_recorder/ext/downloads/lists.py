@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 from ...core.events import Event
 from ...core.extensions import ExtensionContext
 from ...platforms import registry
-from . import api, catalog
+from . import api, catalog, schedule
 from .manager import OWNER, ReplayError
 
 MAX_SELECT = 30
@@ -256,15 +256,19 @@ def build(ctx: ExtensionContext, lists: Lists) -> APIRouter:
         """고른 영상을 기본 화질로 받는다(30개까지). 영상은 그 플랫폼의 작업 종류로 들어간다."""
         if not 1 <= len(body.items) <= MAX_SELECT:
             raise ReplayError(400, f"한 번에 1~{MAX_SELECT}개를 고르십시오.")
-        entries = []
+        entries, targets = [], []
+        collector = lists.require()
         for item in body.items:
             provider = provider_of(item.platform)
             if not re.fullmatch(r"\d{1,20}", item.video_no):
                 raise ReplayError(400, "영상 번호가 올바르지 않습니다.")
             entries.append((provider.video_url(item.video_no, item.channel_id or ""), item.title or f"영상 {item.video_no}"))
+            # 등록한 다시보기 채널에서 고른 영상이면 그 채널을 적는다(채널별 시간대 규칙의 대상)
+            known = bool(item.channel_id) and collector.has_channel(item.channel_id, provider.platform)
+            targets.append(schedule.target_of(provider.platform, item.channel_id) if known else None)
         downloads = api.current()
         if downloads is None:
             raise ReplayError(409, "다운로드를 준비하지 못했습니다")
-        return await downloads.select(OWNER, entries, body.confirm)
+        return await downloads.select(OWNER, entries, body.confirm, targets)
 
     return r

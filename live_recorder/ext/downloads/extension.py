@@ -167,8 +167,9 @@ class DownloadsExtension(Extension):
                 raise ConfigError(str(e)) from None
         if "replay_window_enabled" in mine or "replay_window_rules" in mine:
             enabled = mine.get("replay_window_enabled", ctx.setting("replay_window_enabled"))
-            if enabled and not mine.get("replay_window_rules", ctx.setting("replay_window_rules")):
-                raise ConfigError("다운로드 시간대를 켜려면 규칙이 하나 이상 있어야 합니다")
+            rules = mine.get("replay_window_rules", ctx.setting("replay_window_rules"))
+            if enabled and not any(not rule.get("target") for rule in rules):  # 채널을 지정한 규칙은 그 채널에만 쓴다
+                raise ConfigError("다운로드 시간대를 켜려면 대상이 전체인 규칙이 하나 이상 있어야 합니다")
 
     async def settings_applied(self, ctx: ExtensionContext, changes: dict[str, Any]) -> None:
         await ctx.service.reload()  # 저장 즉시 적용
