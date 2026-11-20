@@ -10,7 +10,7 @@ import fake_extension
 from live_recorder.core import extensions
 from test_settings_tabs import browser_site, open_page, until  # noqa: F401  (fixture)
 
-VIEWS = ["channels", "history", "replay", "files", "cookies", "settings"]
+VIEWS = ["channels", "history", "replay", "files", "cookies", "logs", "settings"]
 
 
 def watch_console(page):
@@ -45,7 +45,7 @@ def test_all_six_views_open_without_console_errors(browser_site):  # noqa: F811
     assert loaded.index("/static/boot.js") < loaded.index("/static/views/channels.js")
     assert [x for x in loaded if x.startswith(("/static/views/", "/static/ext/"))] == [
         "/static/views/channels.js", "/static/views/history.js", "/static/views/files.js", "/static/views/cookies.js",
-        "/static/views/settings.js", "/static/ext/downloads/downloads.js",
+        "/static/views/logs.js", "/static/views/settings.js", "/static/ext/downloads/downloads.js",
         "/static/ext/downloads/catalog.js"]  # 채널 목록 화면은 downloads의 공통 부분이 됐다(전에는 replay의 replay-list.js)
     visit_all(page)
     assert page.is_hidden("#boot-failed")

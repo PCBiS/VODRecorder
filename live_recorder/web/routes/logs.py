@@ -1,4 +1,4 @@
-"""경로 묶음: 로그 내려받기. 로그 파일 밖의 줄은 켜진 확장(`log_export`)에서 받는다. 다른 묶음을 부르지 않는다."""
+"""경로 묶음: 로그 보기와 로그 내려받기. 로그 파일 밖의 줄은 켜진 확장(`log_export`)에서 받는다. 다른 묶음을 부르지 않는다."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import StrictBool
 
-from ... import logexport
+from ... import logexport, logview
 from ..auth import Strict
 
 if TYPE_CHECKING:
@@ -27,6 +27,28 @@ class ExportBody(Strict):
 def build(ctx: "WebContext") -> APIRouter:
     r = APIRouter()
     export_lock = asyncio.Lock()
+
+    @r.get("/api/logs")
+    async def logs_view(limit: int = Query(logview.PAGE_DEFAULT, ge=1, le=logview.PAGE_MAX),
+                        level: str = Query("", max_length=10), channel: str = Query("", max_length=200),
+                        q: str = Query("", max_length=200), before: str = Query("", max_length=60),
+                        after: str = Query("", max_length=60)):
+        """로그 보기. 새것부터 한 쪽(`before`: 더 오래된 쪽) 또는 `after` 뒤에 새로 쓰인 줄. 읽기만 하고 스레드에서 읽는다."""
+        lv = level.strip().upper()
+        if lv and lv not in logview.LEVELS:
+            raise HTTPException(400, "수준은 DEBUG·INFO·WARNING·ERROR·CRITICAL 가운데 하나입니다")
+        if before and after:
+            raise HTTPException(400, "before와 after는 함께 쓸 수 없습니다")
+        flt = logview.Filter(level=logview.LEVELS.get(lv, 0), channel=channel.strip() or None, text=q.strip() or None)
+        secrets = ctx.sessions.secrets()
+        try:
+            if after:
+                return await asyncio.to_thread(logview.read_newer, ctx.cfg, after=after, limit=limit, flt=flt,
+                                               session_secrets=secrets)
+            return await asyncio.to_thread(logview.read_page, ctx.cfg, before=before or None, limit=limit, flt=flt,
+                                           session_secrets=secrets)
+        except logview.CursorError as e:
+            raise HTTPException(400, str(e)) from None
 
     @r.post("/api/logs/export")
     async def logs_export(body: ExportBody):

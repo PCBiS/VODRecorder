@@ -31,6 +31,7 @@ ACCESS_RULES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/api/view/sessions", VIEW),  # 기록 화면의 보기(줄인 필드)
     ("GET", "/setup", VIEW),  # 첫 설정 화면
     ("POST", "/api/setup", VIEW),  # 제출. 출처 검사(same_origin)는 그대로 거친다
+    ("GET", "/api/logs", LOGIN),  # 로그 보기(읽기만)
     ("POST", "/api/logs/export", LOGIN),  # 로그 내려받기. CSRF 검사를 거친다
     ("GET", "/api/settings/filename-example", LOGIN),  # 파일 이름 예시(읽기만)
     ("GET", "/api/settings/filename-tokens", LOGIN),  # 토큰 설명 표(읽기만)
@@ -60,7 +61,7 @@ KEY_RULES: tuple[tuple[str, str, str], ...] = (
     ("POST", "/api/channels/{channel_id}/start", KEY_OPERATE),
     ("POST", "/api/channels/{channel_id}/stop", KEY_OPERATE),
     # 키로는 불가(사람이 화면에서만): 로그인·화면 문서, 설정, 쿠키, 플랫폼·확장 켜고 끄기, 확인 간격, 파일 바꾸기,
-    # 계정·비밀번호, 접근 키 관리, 로그 내려받기, 도구 갱신, 텔레그램
+    # 계정·비밀번호, 접근 키 관리, 로그 보기·내려받기, 도구 갱신, 텔레그램
     ("GET", "/", KEY_NONE),
     ("GET", "/login", KEY_NONE),
     ("GET", "/setup", KEY_NONE),
@@ -85,6 +86,7 @@ KEY_RULES: tuple[tuple[str, str, str], ...] = (
     ("POST", "/api/cookies/upload", KEY_NONE),
     ("DELETE", "/api/cookies", KEY_NONE),
     ("POST", "/api/cookies/check", KEY_NONE),
+    ("GET", "/api/logs", KEY_NONE),
     ("POST", "/api/logs/export", KEY_NONE),
     ("PUT", "/api/platforms/{platform_id}/gate", KEY_NONE),
     ("POST", "/api/platforms/{platform_id}/enable", KEY_NONE),

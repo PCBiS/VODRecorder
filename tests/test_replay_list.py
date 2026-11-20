@@ -842,7 +842,7 @@ def test_hidden_attribute_always_wins_and_tab_spacing():
     # 탭 단추: 글자와 배지 사이에 빈칸 글자가 없고, 간격은 gap 하나로 준다(배지를 숨기면 간격도 없다)
     index = pages[0]
     tabs = re.findall(r'<button class="tab"[^>]*>(.*?)</button>', index)
-    assert len(tabs) == 6 and all(t == t.strip() for t in tabs)
+    assert len(tabs) == 7 and all(t == t.strip() for t in tabs)  # 로그 탭을 더해 7개
     # 탭 이름은 켜진 확장에 맞춰 화면이 바꾸므로 글자를 span에 둔다(글자와 배지 사이에 빈칸 글자는 여전히 없다)
     assert '><span id="replay-tab-label">다시보기</span><span id="replay-badge" class="tab-badge" hidden></span></button>' in index
     tab = [body for sel, body in rules if sel == ".tab"][0]

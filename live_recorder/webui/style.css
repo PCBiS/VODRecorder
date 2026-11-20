@@ -729,3 +729,35 @@ label.check input, .switch input { flex: 0 0 auto; } /* 글이 길어 줄이 넘
   .wiki-crumb { display: none; }
 }
 
+/* 로그 보기(텍스트 뷰어) */
+.logs-filter { gap: .6rem 1.1rem; }
+.logs-filter label { margin: 0; }
+.logs-filter label.inline select { min-width: 9rem; }
+.logs-search { flex: 1 1 16rem; }
+.logs-search input { flex: 1; min-width: 0; }
+.logs-help { margin: .7rem 0 0; }
+.logs-help a { color: var(--accent); }
+.logs-viewer { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.logs-more { padding: .45rem .7rem; border-bottom: 1px solid var(--line); min-height: 2.4rem; }
+.push-right { margin-left: auto; }
+.logs-text-box {
+  height: max(22rem, calc(100vh - 23rem)); overflow: auto; padding: .5rem .8rem .8rem; background: var(--bg);
+  font-family: ui-monospace, "NanumGothicCoding", monospace; font-size: .8rem; line-height: 1.5; tab-size: 4;
+}
+.logs-text-box:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.logline { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 .3rem; border-radius: 3px; }
+.logs-text-box.nowrap .logline { white-space: pre; overflow-wrap: normal; width: max-content; min-width: 100%; }
+.logline:hover { background: var(--idle-bg); }
+.logline .lt { color: var(--muted); }
+.logline .ls, .logline .lf { color: var(--muted); }
+.logline .le { color: var(--accent); }
+.logline .ll { font-weight: 600; }
+.logline.debug { color: var(--muted); }
+.logline.warn .ll { color: var(--warn); }
+.logline.bad { background: var(--err-bg); }
+.logline.bad .ll, .logline.bad .lm { color: var(--err); }
+.logline .lx { color: var(--err); }
+.logs-empty { padding: 1rem .3rem; font-family: inherit; }
+@media (max-width: 640px) {
+  .logs-text-box { height: 70vh; font-size: .75rem; padding: .4rem .5rem; }
+}

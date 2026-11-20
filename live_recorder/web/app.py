@@ -1,6 +1,6 @@
 """웹 서버 뼈대: 앱 만들기, 인증, 접근 관문, 정적 파일, 공통 오류 형식, 화면 문서.
 
-기능별 경로는 `routes/`의 묶음이 만든다(채널·녹화, 기록, 쿠키, 설정, 파일 관리자, 로그 내려받기, 다시보기).
+기능별 경로는 `routes/`의 묶음이 만든다(채널·녹화, 기록, 쿠키, 설정, 파일 관리자, 로그 보기·내려받기, 다시보기).
 묶음끼리는 서로 부르지 않고 `WebContext`만 쓴다. 켜진 확장의 경로·접근 규칙·화면 파일도 여기서 붙인다.
 엔진은 같은 프로세스에서 돌고, 웹 API는 `Engine`의 메서드를 직접 부른다.
 """
@@ -49,7 +49,7 @@ SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 STATIC_CACHE_CONTROL = "no-cache"  # 쓸 때마다 서버에 묻는다(저장은 해도 된다)
 # 화면 뼈대(app.js)가 순서대로 불러오는 화면별 스크립트. index.html의 lr-scripts와 같아야 한다(시험이 본다)
 CORE_SCRIPTS = ("/static/views/channels.js", "/static/views/history.js",
-                "/static/views/files.js", "/static/views/cookies.js", "/static/views/settings.js")
+                "/static/views/files.js", "/static/views/cookies.js", "/static/views/logs.js", "/static/views/settings.js")
 CORE_STYLES: tuple[str, ...] = ()
 
 

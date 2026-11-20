@@ -6,7 +6,7 @@
 <title>{{PROGRAM_NAME}}</title>
 <link rel="stylesheet" href="/static/style.css">
 <!-- 화면 뼈대(app.js)가 이 순서대로 불러오는 화면별 스크립트·스타일. 서버가 켜진 확장의 파일을 더해 내려 준다 -->
-<meta id="lr-scripts" name="lr-scripts" content="/static/views/channels.js /static/views/history.js /static/views/files.js /static/views/cookies.js /static/views/settings.js">
+<meta id="lr-scripts" name="lr-scripts" content="/static/views/channels.js /static/views/history.js /static/views/files.js /static/views/cookies.js /static/views/logs.js /static/views/settings.js">
 <meta id="lr-styles" name="lr-styles" content="">
 <script src="/static/theme.js"></script>
 <script src="/static/boot.js"></script>
@@ -20,6 +20,7 @@
     <!-- lr-slot:nav -->
     <button class="tab" data-view="files" role="tab">파일</button>
     <button class="tab" data-view="cookies" role="tab">쿠키</button>
+    <button class="tab" data-view="logs" role="tab">로그</button>
     <button class="tab" data-view="settings" role="tab">설정</button>
   </nav>
   <div class="who">
@@ -137,6 +138,34 @@
       <label>또는 내용 붙여 넣기<textarea id="cookie-upload-text" rows="4" spellcheck="false" placeholder="파일 내용(256KB 이하)"></textarea></label>
       <div class="row form-actions"><button class="btn primary" type="submit">쿠키 파일 올리기</button><span id="cookie-upload-result" class="muted"></span></div>
     </form>
+  </section>
+
+  <section id="view-logs" class="view" data-boot-hide hidden>
+    <div class="section-head">
+      <h1>로그</h1>
+      <span id="logs-note" class="muted"></span>
+      <div class="row"><button id="logs-refresh" class="btn small" type="button">새로고침</button></div>
+    </div>
+    <form id="logs-filter" class="panel" role="search" autocomplete="off">
+      <div class="row logs-filter">
+        <label class="inline">수준<select id="logs-level">
+          <option value="">모두</option><option value="WARNING">경고 이상</option><option value="ERROR">오류만</option>
+        </select></label>
+        <label class="inline">채널<select id="logs-channel"><option value="">모든 채널</option></select></label>
+        <label class="inline logs-search">찾기<input id="logs-q" type="search" maxlength="200" spellcheck="false" placeholder="문장·이벤트·값에 든 글"></label>
+        <label class="check"><input id="logs-follow" type="checkbox" checked>새 줄 자동으로 보기</label>
+        <label class="check"><input id="logs-wrap" type="checkbox" checked>긴 줄 바꿈</label>
+      </div>
+      <p class="muted logs-help">로그 파일처럼 아래가 새 줄입니다. 쿠키·토큰 같은 비밀 값은 가려서 보이고, 접속 주소·채널·파일 이름은 그대로 보입니다. zip으로 묶어 받으려면 <a href="#settings/general">설정 &gt; 일반의 로그 내려받기</a>를 쓰십시오.</p>
+    </form>
+    <div class="logs-viewer">
+      <div class="row logs-more">
+        <button id="logs-older" class="btn small" type="button" hidden>더 오래된 줄 보기</button>
+        <span id="logs-status" class="muted"></span>
+        <button id="logs-bottom" class="btn small ghost push-right" type="button">맨 아래로</button>
+      </div>
+      <div id="logs-body" class="logs-text-box" role="log" aria-label="로그" tabindex="0"></div>
+    </div>
   </section>
 
   <section id="view-settings" class="view" data-boot-hide hidden>
