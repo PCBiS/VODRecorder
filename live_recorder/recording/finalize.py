@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import lowprio
+from ..core import codec as codec_mod
 from ..core import childenv
 from ..core import store as st
 from ..core.config import AppConfig
@@ -59,6 +60,7 @@ class Probe:
     has_audio: bool = False
     video_duration: float | None = None
     audio_duration: float | None = None
+    video_codec: str = ""  # 첫 영상 스트림의 코덱(짧은 이름)
 
 
 def within_tolerance(actual: float, expected: float) -> bool:
@@ -301,8 +303,9 @@ class Finalizer:
             if value > 0:
                 duration = value
                 break
+        video_codec = next((codec_mod.from_name(s.get("codec_name")) for s in streams if s.get("codec_type") == "video"), "")
         return Probe(True, has_video, duration, str(fmt.get("format_name") or ""), has_audio=has_audio,
-                     video_duration=stream_duration("video"), audio_duration=stream_duration("audio"))
+                     video_duration=stream_duration("video"), audio_duration=stream_duration("audio"), video_codec=video_codec)
 
     def _low(self) -> bool:
         try:
@@ -426,7 +429,7 @@ class Finalizer:
             return "skipped", "원본 파일이 없습니다", None
         audio = audio_part(part)
         return await self.finalize_file(part, final, settings, expected=self._expected(session),
-                                        audio=audio if _size(audio) > 0 else None)
+                                        audio=audio if _size(audio) > 0 else None, scan_codecs=self._needs_scan(session))
 
     async def _refinalize(self, session: dict, settings) -> tuple[str, str, Path | None]:
         """남은 원본에서 다시 마무리한다. 실패하면 원본은 같은 이름으로 그대로 남는다."""
@@ -436,8 +439,16 @@ class Finalizer:
             return "failed", "다시 마무리할 원본이 없습니다", None
         status, detail, out = await self.finalize_file(raw, final, settings, expected=self._expected(session),
                                                        source_is_raw=True,
-                                                       audio=await asyncio.to_thread(raw_audio_of, raw))
+                                                       audio=await asyncio.to_thread(raw_audio_of, raw),
+                                                       scan_codecs=self._needs_scan(session))
         return status, "다시 마무리: " + detail, out
+
+    @staticmethod
+    def _needs_scan(session: dict) -> bool:
+        """코덱이 기록된 세션은 코덱을 고정하는 수신기가 받은 것이라 원본을 훑지 않는다.
+        기록이 없는 세션(이 규칙이 없던 빌드가 받았거나 시작 사건 없이 끝난 것)만 훑는다. 훑기는 원본 전체의 상자 머리를
+        읽으므로(2초 조각마다 7개쯤, 실측: ) 긴 원본에서는 디스크를 한참 쓴다."""
+        return not session.get("video_codec")
 
     @staticmethod
     def _expected(session: dict) -> float | None:
@@ -455,7 +466,8 @@ class Finalizer:
         return session.get("media_seconds") or None
 
     async def finalize_file(self, part: Path, final: Path, settings, expected: float | None = None,
-                            source_is_raw: bool = False, audio: Path | None = None) -> tuple[str, str, Path | None]:
+                            source_is_raw: bool = False, audio: Path | None = None,
+                            scan_codecs: bool = True) -> tuple[str, str, Path | None]:
         """source_is_raw면 part는 이미 남겨 둔 원본(`.raw.*`)이다. 실패해도 이름을 바꾸지 않는다.
         audio가 있으면 따로 받은 음성 원본이다. 다시 인코딩하지 않고 영상과 합친다."""
         size = part.stat().st_size
@@ -490,6 +502,13 @@ class Finalizer:
         if not src.ok or not src.has_video:
             kept = await asyncio.to_thread(keep_raw)
             return "failed", f"원본 검증 실패({src.detail or '영상 스트림 없음'}). 원본 보존: {kept_text(kept)}", kept
+        # 한 파일에 코덱이 섞였으면 변환하지 않는다. 변환은 오류 없이 끝나고 길이도 맞지만 뒤쪽이 풀리지 않는다
+        mixed = await asyncio.to_thread(codec_mod.scan_file, part) if scan_codecs and raw_ext == ".mp4" else []
+        if len(mixed) > 1:
+            kept = await asyncio.to_thread(keep_raw)
+            names = " → ".join(codec_mod.label(c) for _, c in mixed)
+            return ("failed", f"원본에 영상 코덱이 섞여 있습니다({names}, 바뀐 위치 {mixed[1][0]}바이트). 변환하지 않았습니다. "
+                    f"원본 보존: {kept_text(kept)}", kept)
         if audio is not None:
             a_src = await self.probe(audio, head=True)
             if not a_src.ok or not a_src.has_audio:
@@ -497,6 +516,13 @@ class Finalizer:
                 return "failed", f"음성 원본 검증 실패({a_src.detail or '음성 스트림 없음'}). 원본 보존: {kept_text(kept)}", kept
 
         target_ext = final.suffix.lower()
+        if target_ext == ".ts" and src.video_codec == codec_mod.AV1 and settings.remux_enabled:
+            # AV1은 MPEG-TS에 담지 않는다(FFmpeg 8.0.1 실측: 변환은 끝나지만 결과에서 영상을 읽지 못한다)
+            final = final.with_suffix(".mp4")
+            target_ext = ".mp4"
+            warn_container = ". AV1은 .ts로 만들 수 없어 .mp4로 저장했습니다"
+        else:
+            warn_container = ""
         if not settings.remux_enabled and audio is None:
             # 변환을 끄면 원본 그대로 둔다. 확장자는 실제 컨테이너를 따른다.
             dst = free_name(final if target_ext == raw_ext else final.with_suffix(raw_ext))
@@ -541,6 +567,9 @@ class Finalizer:
             return await asyncio.to_thread(fail, f"변환 결과 검증 실패({out.detail or '영상·길이 없음'})")
         if audio is not None and not out.has_audio:
             return await asyncio.to_thread(fail, "변환 결과 검증 실패(음성 스트림 없음)")
+        if src.video_codec and out.video_codec and src.video_codec != out.video_codec:
+            return await asyncio.to_thread(
+                fail, f"변환 결과의 영상 코덱이 원본과 다릅니다(원본 {codec_mod.label(src.video_codec)}, 결과 {codec_mod.label(out.video_codec)})")
         ok = expected is not None and within_tolerance(out.duration, expected)
         measured = None
         if not ok:
@@ -568,6 +597,6 @@ class Finalizer:
             await asyncio.to_thread(part.unlink)
             if audio is not None:
                 await asyncio.to_thread(audio.unlink, True)
-            return "done", f"변환 완료 {out.duration:.1f}초{merged}, 원본 삭제{warn}", dst
+            return "done", f"변환 완료 {out.duration:.1f}초{merged}, 원본 삭제{warn}{warn_container}", dst
         kept = await asyncio.to_thread(keep_raw)
-        return "done", f"변환 완료 {out.duration:.1f}초{merged}, 원본 보존: {kept_text(kept)}{warn}", dst
+        return "done", f"변환 완료 {out.duration:.1f}초{merged}, 원본 보존: {kept_text(kept)}{warn}{warn_container}", dst

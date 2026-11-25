@@ -69,7 +69,7 @@ def test_pack_has_no_secrets_or_identifiers(tmp_path, server, tools):
         assert value not in blob, value
     # 쓸모 있는 값은 들어 있다
     assert parsed["summary.json"]["symptom"] == "recording" and parsed["summary.json"]["versions"]["ffmpeg"].startswith("ffmpeg")
-    assert parsed["settings.json"]["channels"] == [{"index": 1, "quality": "best", "extension": ".mp4", "auto_record": True}]
+    assert parsed["settings.json"]["channels"] == [{"index": 1, "quality": "best", "extension": ".mp4", "auto_record": True, "video_codec": "h264"}]
     assert parsed["settings.json"]["secrets"] == {"cookies": True, "telegram": True, "account": True, "setup_code": False}
     assert parsed["settings.json"]["filename_pattern"] == {"tokens": ["channel_name", "safe_live_title", "file_extension"]}
     s0 = parsed["sessions.json"][0]

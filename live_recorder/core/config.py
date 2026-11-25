@@ -260,6 +260,7 @@ class Settings:
     notify_start_failed: bool = True
     notify_abnormal_end: bool = True
     notify_timemachine_fallback: bool = True
+    notify_codec_changed: bool = True
     notify_finalize_failed: bool = True
     notify_disk_low: bool = True
     notify_cookie_expired: bool = True
@@ -298,7 +299,7 @@ class Settings:
         "notify_enabled": _bool,
         "notify_dedupe_seconds": _int_range(0, 86400),
         **{f"notify_{name}": _bool for name in (
-            "start_failed", "abnormal_end", "timemachine_fallback", "finalize_failed", "disk_low", "cookie_expired",
+            "start_failed", "abnormal_end", "timemachine_fallback", "codec_changed", "finalize_failed", "disk_low", "cookie_expired",
             "record_start", "record_end", "user_stop", "finalize_done")},
         "session_minutes": _int_range(0, 525600),
         "login_limit_enabled": _bool,

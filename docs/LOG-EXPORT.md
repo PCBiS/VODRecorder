@@ -52,7 +52,7 @@
 | `logs/live-recorder.jsonl` | 서버 로그 파일(`live-recorder.log`와 순환된 `live-recorder.log.1`~`.5`)에서 고른 기간의 줄. 한 줄에 JSON 하나, 오래된 것부터 | 로그 폴더. 5 MiB씩 5개 순환 |
 | `replay/job-logs.jsonl` | 다시보기·클립·유튜브 영상 작업별 로그에서 고른 기간의 줄. **downloads 확장이 켜져 있을 때만** 들어갑니다(로그 내려받기는 확장이 내놓은 줄을 묶기만 합니다) | `replay/replay.sqlite3`의 `logs` 표. 작업마다 최근 200줄 |
 | `diagnostics/summary.json` | 만든 시각, 버전(live_recorder, Python, 운영체제 문자열, ffmpeg·ffprobe의 `-version` 첫 줄), 디스크 사용량(데이터·녹화·로그 폴더의 전체·사용·여유 바이트) | 진단팩과 같은 함수 |
-| `diagnostics/settings.json` | 설정값(비밀 아닌 것), 채널별 화질·확장자·자동 녹화, 비밀 저장소 파일이 있는지 여부. 켠 확장의 설정(예: downloads의 `replay_*`)도 같은 자리에 들어갑니다(경로는 설정 여부만) | 진단팩과 같은 함수 |
+| `diagnostics/settings.json` | 설정값(비밀 아닌 것), 채널별 화질·확장자·자동 녹화·코덱 우선순위, 비밀 저장소 파일이 있는지 여부. 켠 확장의 설정(예: downloads의 `replay_*`)도 같은 자리에 들어갑니다(경로는 설정 여부만) | 진단팩과 같은 함수 |
 | `diagnostics/sessions.json` | 최근 세션 200개의 시각·채널·종료 사유·종료코드·길이·크기·수신 방식·마무리 결과·주소 갱신 횟수 | 녹화 저장소의 세션 기록 |
 | `diagnostics/log_summary.json` | 고른 기간의 로그에서 경고·오류를 (수준, 로거, 이벤트, 문장 틀, 예외 형식)으로 묶은 횟수와 처음·마지막 시각, 수준별 줄 수 | 진단팩과 같은 함수 |
 
@@ -97,7 +97,7 @@
 | `end_reason` | 세션 종료 사유: `broadcast_end`, `user_stop`, `stalled`, `error`, `server_shutdown` | 남는다 |
 | `result` | 쿠키 확인 결과: `valid`, `expired`, `missing`, `failed` | 남는다 |
 | `reason` | 쿠키 확인을 한 까닭: `daily`(하루 한 번), `button`(화면의 확인 단추). 저장소 옮기기 실패(`store_migration_failed`)에서는 SQLite 예외 형식 이름 | 남는다 |
-| `notify_event` | 텔레그램 알림 종류: `start_failed`, `abnormal_end`, `timemachine_fallback`, `finalize_failed`, `disk_low`, `cookie_expired`, `record_start`, `record_end`, `user_stop`, `finalize_done` 등 | 남는다 |
+| `notify_event` | 텔레그램 알림 종류: `start_failed`, `abnormal_end`, `timemachine_fallback`, `codec_changed`, `finalize_failed`, `disk_low`, `cookie_expired`, `record_start`, `record_end`, `user_stop`, `finalize_done` 등 | 남는다 |
 | `status` | 마무리 결과: `done`, `skipped`, `failed`, `pending`. 접근 키 요청(`api_key_request`)에서는 HTTP 결과 코드 | 남는다 |
 | `key_name` | 접근 키에 관리자가 붙인 이름 | 더 가리기의 값 규칙을 따른다 |
 | `key_prefix` | 접근 키 값의 앞 8자(`vr_` + 5자. 키로 쓸 수 없는 길이) | 남는다 |
@@ -131,6 +131,9 @@
 | engine | `failure` | WARNING | `실패 %d회: %s` | 실패 횟수, 실패 문장(API 오류, 시작 실패 사유) | `channel_id`, `platform`, `fails`, `error_flag` |
 | engine | `disk_low` | ERROR | (값을 채운 문장. 틀 없음) `디스크 여유 부족: N MiB < M MiB` | 여유 공간·한도 | `channel_id`, `platform` |
 | engine | `timemachine_fallback` | WARNING | (값을 채운 문장. 틀 없음) `타임머신 실패(…). 일반 수신으로 전환` | API 오류 문장 | `channel_id`, `platform` |
+| engine | `codec_changed` | WARNING | `녹화 중 영상 코덱이 바뀌었다 %s → %s` | 앞뒤 코덱 이름(`h264`·`hevc`·`av1`) | `channel_id`, `platform`, `session_id` |
+| engine | `codec_change_gap` | WARNING | `코덱이 바뀌어 나눈 파일 사이가 %.1f초 비었다` | 빈 시간(초) | `channel_id`, `platform`, `session_id` |
+| engine | `codec_differs` | WARNING | `정한 코덱(%s)과 다른 코덱(%s)을 받는다` | 코덱 이름 | `channel_id`, `platform`, `session_id` |
 | engine | `url_refresh` | INFO | `재생 주소 갱신 %s ok=%s` | 갱신 까닭, 성공 여부 | `channel_id`, `platform`, `session_id` |
 | engine | `segment_gap` | WARNING | `조각 누락 %s개` | 빠진 조각 수 | `channel_id`, `platform`, `session_id` |
 | engine | `worker_exception` | ERROR | `채널 감시 중 예외` | — (`exc`에 traceback) | `channel_id`, `platform` |
@@ -286,7 +289,7 @@
 | 파일 | 필드 |
 |---|---|
 | `diagnostics/summary.json` | `created_at`, `versions`(`live_recorder`, `python`, `platform`, `ffmpeg`, `ffprobe`), `disk`(`data`·`recordings`·`logs`마다 `total`·`used`·`free`) |
-| `diagnostics/settings.json` | 설정 키 전부(비밀 아님), `channels`(채널마다 `channel`(채널-N), `quality`, `extension`, `auto_record`), `secrets`(`cookies`, `telegram`, `account`, `setup_code` 있는지) |
+| `diagnostics/settings.json` | 설정 키 전부(비밀 아님), `channels`(채널마다 `channel`(채널-N), `quality`, `extension`, `auto_record`, `video_codec`), `secrets`(`cookies`, `telegram`, `account`, `setup_code` 있는지) |
 | `diagnostics/sessions.json` | 세션마다 `session`, `channel`(채널-N, 지운 채널은 그래도 번호), `started_at`, `ended_at`, `end_reason`, `exit_code`, `media_seconds`, `bytes`, `source`, `finalize_status`, `clean_exit`, `time_machine_active`, `refreshes` |
 | `diagnostics/log_summary.json` | `lines_read`, `levels`(수준별 줄 수), `problems`(경고·오류 묶음마다 `level`, `logger`, `event`, `template`(수신기 줄은 비움), `exception`(형식 이름), `count`, `first`, `last`) |
 

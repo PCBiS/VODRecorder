@@ -29,6 +29,7 @@ class ChannelCreate(Strict):
     quality: StrictStr = "best"
     extension: StrictStr = ".mp4"
     auto_record: StrictBool = True
+    video_codec: StrictStr = "h264"  # 코덱 우선순위: h264, hevc, av1, any(방송이 내놓은 순서)
 
 
 class GateBody(Strict):
@@ -51,6 +52,7 @@ class ChannelPatch(Strict):
     quality: StrictStr | None = None
     extension: StrictStr | None = None
     auto_record: StrictBool | None = None
+    video_codec: StrictStr | None = None
 
 
 def coarse_error(text: str) -> str:

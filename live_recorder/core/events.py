@@ -24,7 +24,7 @@ log = logging.getLogger("live_recorder.events")
 EVENTS: dict[str, tuple[str, ...]] = {
     "server_started": ("channels",),
     "server_stopping": (),
-    "channel_added": ("name", "output_dir", "quality", "extension", "auto_record"),
+    "channel_added": ("name", "output_dir", "quality", "extension", "auto_record", "video_codec"),
     "channel_updated": ("changes",),
     "channel_removed": ("result",),
     "record_started": ("session_id", "live_id", "source", "path"),

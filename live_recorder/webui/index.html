@@ -375,6 +375,13 @@
     <div class="grid">
       <label>화질<select name="quality"></select></label>
       <label>확장자<select name="extension"><option>.mp4</option><option>.ts</option></select></label>
+      <label class="span2">영상 코덱 우선순위<select name="video_codec">
+        <option value="h264">H.264 우선</option>
+        <option value="hevc">HEVC 우선</option>
+        <option value="av1">AV1 우선</option>
+        <option value="any">방송이 주는 대로</option>
+      </select></label>
+      <p class="muted field-note span2">고른 코덱이 방송에 없으면 있는 코덱으로 녹화합니다. 녹화 중에 코덱이 바뀌면 새 파일로 나눕니다.</p>
     </div>
     <label class="check"><input name="auto_record" type="checkbox" checked>자동 녹화</label>
     <p id="channel-error" class="form-error" role="alert" hidden></p>

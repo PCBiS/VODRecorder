@@ -369,6 +369,7 @@ function openChannelDialog(ch) {
   showFolderHint();
   form.quality.value = ch ? ch.quality : "best";
   form.extension.value = ch ? ch.extension : ".mp4";
+  form.video_codec.value = ch && ch.video_codec ? ch.video_codec : "h264";
   form.auto_record.checked = ch ? ch.auto_record : true;
   $("channel-delete").hidden = !ch; // 삭제는 수정 창 안에 둔다(카드에는 주 버튼과 수정만)
   $("channel-dialog").showModal();
@@ -379,7 +380,7 @@ async function submitChannel(event) {
   const form = $("channel-form");
   const fields = {
     name: form.name.value, output_dir: form.output_dir.value, quality: form.quality.value,
-    extension: form.extension.value, auto_record: form.auto_record.checked,
+    extension: form.extension.value, auto_record: form.auto_record.checked, video_codec: form.video_codec.value,
   };
   try {
     if (editing) {

@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 
 SESSION_KEYS = ("id", "channel_id", "live_id", "title", "source", "note", "started_at", "ended_at", "end_reason",
                 "end_detail", "exit_code", "bytes", "media_seconds", "finalize_status", "finalize_detail",
-                "first_media_time", "last_media_time", "quality_label", "url_refreshes", "platform")
+                "first_media_time", "last_media_time", "quality_label", "url_refreshes", "platform", "video_codec")
 VIEW_SESSION_KEYS = ("id", "ch", "channel_name", "title", "source", "started_at", "ended_at", "end_reason",
                      "exit_code", "bytes", "media_seconds", "finalize_status", "first_media_time", "last_media_time",
-                     "url_refreshes", "file", "timemachine")  # 화면이 수신 방식 표시를 감출지
+                     "url_refreshes", "file", "timemachine", "video_codec")  # 화면이 수신 방식 표시를 감출지
 
 
 def build(ctx: "WebContext") -> APIRouter:

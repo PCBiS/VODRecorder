@@ -24,6 +24,7 @@ from typing import Any, Callable
 from ..core import childenv
 from ..core import gate as gate_mod
 from ..core import naming
+from ..core import codec as codec_mod
 from ..core import quality
 from ..core import store as st
 from ..core.config import AppConfig, Settings
@@ -148,6 +149,8 @@ class RecResult:
     file: str = ""
     seconds: float = 0.0
     exit_code: int | None = None
+    codec: str = ""  # 이 파일에 받은 영상 코덱
+    next_codec: str = ""  # 코덱이 바뀌어 끝났을 때 새 코덱
 
 
 class ChannelWorker:
@@ -406,6 +409,9 @@ class ChannelWorker:
         fails = 0
         first_file = True
         resume_after: str | None = None
+        resume_exact = False  # 코덱이 바뀌어 나눈 다음 파일은 앞 파일의 마지막 조각 바로 뒤부터 받는다
+        prev_codec = ""  # 이 방송에서 앞 파일에 받은 코덱
+        announced = ""  # 이미 알린 새 코덱(같은 전환을 두 번 알리지 않는다)
         live_id = info.live_id
         for other in [k for k in self.endlist_seen if k != live_id]:
             del self.endlist_seen[other]  # 방송 ID(live_id)가 바뀌면 잊는다
@@ -446,7 +452,12 @@ class ChannelWorker:
                 rewind=settings.rewind_seconds if first_file else 0,
                 resume_after=None if first_file else resume_after,
                 after_endlist=self.within_endlist_grace(live_id),
+                resume_exact=resume_exact, prev_codec=prev_codec, announced_codec=announced,
             )
+            resume_exact = False
+            if result.got_data and result.codec:
+                prev_codec = result.codec
+            announced = ""
             if result.kind == "shutdown":
                 return
             if result.kind == "endlist_again":
@@ -467,6 +478,22 @@ class ChannelWorker:
                 fails += 1  # 시작 실패, 또는 한 조각도 못 받고 정체로 끝남
             else:
                 self.endlist_seen.pop(live_id, None)  # 조각을 받았으면 잊는다
+            if result.kind == "ended" and result.detail == "codec_changed":
+                # 방송은 이어지고 있다. 상태를 다시 묻지 않고 곧바로 새 파일로 잇는다
+                text = (f"녹화 중 영상 코덱이 바뀌었습니다({codec_mod.label(result.codec)} → {codec_mod.label(result.next_codec)})."
+                        " 새 파일로 이어서 녹화합니다")
+                log.warning("녹화 중 영상 코덱이 바뀌었다 %s → %s", result.codec or "?", result.next_codec or "?",
+                            extra={"event": "codec_changed", "channel_id": self.channel_id, "platform": self.platform_id,
+                                   "session_id": result.session_id})
+                self.notify(settings, "codec_changed", ch.name, text, result.file)
+                announced = result.next_codec
+                if result.session_id:
+                    await self.db(self.store.update_session, result.session_id, note=text)
+                if self.stop_requested:
+                    await self.set_state(st.WATCHING, skip_live_id=live_id, session_id=None)
+                    return
+                resume_exact = True
+                continue
             if result.kind == "ended" and result.detail == "endlist":
                 self.endlist_seen[live_id] = (time.monotonic(), resume_after)
                 # 종료 표시로 끝났으면 상태를 곧바로 다시 보지 않고 기다린다. 중지·종료에는 바로 깬다
@@ -521,10 +548,11 @@ class ChannelWorker:
 
     # ---- 녹화 한 번 ----
     async def record_once(self, ch: st.Channel, info: LiveInfo, settings: Settings, *, rewind: int,
-                          resume_after: str | None, after_endlist: bool = False) -> RecResult:
+                          resume_after: str | None, after_endlist: bool = False, resume_exact: bool = False,
+                          prev_codec: str = "", announced_codec: str = "") -> RecResult:
         eng = self.engine
         folder = Path(ch.output_dir)
-        track = quality.select(info.tracks, ch.quality)
+        track = quality.select(info.tracks, ch.quality, ch.video_codec)
         q_label, fps = quality.label(track, ch.quality)
         now = datetime.now(KST)
         name = naming.render(
@@ -573,8 +601,10 @@ class ChannelWorker:
             # 타임머신이 없어도 플랫폼이 일반 재생목록의 창으로 되감기를 밝히면 같은 규칙을 쓴다
             "rewind_seconds": rewind if source == "timemachine" or self.platform.features.live_rewind else 0,
             "start_after": resume_after if (source == "timemachine" or self.platform.features.live_rewind
-                                            or self.platform.features.live_resume) else None,
+                                            or self.platform.features.live_resume or resume_exact) else None,
             "want_height": track.height if track else None,
+            "want_codec": track.codec if track else "",  # 수신기가 CODECS로 같은 코덱의 변형을 고른다
+            "codec_prefer": ch.video_codec,
             "refresh": refresh,
             "refresh_first": bool(self.platform.features.fresh_master),  # 열 때도 새 주소를 받는다
             "platform_module": registry.module_name(self.platform),  # 수신기가 주소 갱신·머리글을 이 모듈에서 얻는다
@@ -643,7 +673,41 @@ class ChannelWorker:
                     last.update({k: ev[k] for k in ("bytes", "media_seconds", "first_media_time", "last_media_time") if k in ev})
                 if kind == "start":
                     last["first_media_time"] = ev.get("first_media_time")
-                    await self.db(self.store.update_session, sid, first_media_time=ev.get("first_media_time"))
+                    got = str(ev.get("codec") or "")
+                    codec_fields: dict[str, Any] = {}
+                    if got:  # 실제로 받은 코덱을 기록한다. H.264가 아니면 화질 표시에도 적는다
+                        last["codec"] = got
+                        codec_fields["video_codec"] = got
+                        if got != codec_mod.H264:
+                            codec_fields["quality_label"] = f"{q_label}{fps} {codec_mod.label(got)}"
+                        if prev_codec and got != prev_codec:
+                            # 같은 방송의 앞 파일과 코덱이 다르다. 어떤 까닭으로 새 파일이 됐든(끊김·정체 포함) 남기고 알린다
+                            change = f"{codec_mod.label(prev_codec)} → {codec_mod.label(got)}"
+                            codec_fields["note"] = f"앞 파일에서 이어짐. 영상 코덱이 바뀌었습니다({change})"
+                            if got != announced_codec:
+                                log.warning("녹화 중 영상 코덱이 바뀌었다 %s → %s", prev_codec, got,
+                                            extra={"event": "codec_changed", "channel_id": self.channel_id,
+                                                   "platform": self.platform_id, "session_id": sid})
+                                self.notify(settings, "codec_changed", ch.name,
+                                            f"녹화 중 영상 코덱이 바뀌었습니다({change}). 새 파일로 이어서 녹화합니다", final.name)
+                        if resume_exact and resume_after and ev.get("first_media_time"):
+                            # 일반 수신은 재생목록이 짧아(치지직은 조각 3개) 새 파일을 여는 사이에 조각이 지나갈 수 있다
+                            try:
+                                hole = (datetime.fromisoformat(ev["first_media_time"])
+                                        - datetime.fromisoformat(resume_after)).total_seconds()
+                            except (TypeError, ValueError):
+                                hole = 0.0
+                            if hole > 0.5:
+                                codec_fields["note"] = (codec_fields.get("note") or "앞 파일에서 이어짐") + f". 앞 파일과 {hole:.1f}초가 비었습니다"
+                                log.warning("코덱이 바뀌어 나눈 파일 사이가 %.1f초 비었다", hole,
+                                            extra={"event": "codec_change_gap", "channel_id": self.channel_id,
+                                                   "platform": self.platform_id, "session_id": sid})
+                        want = track.codec if track else ""
+                        if want and got != want:
+                            log.warning("정한 코덱(%s)과 다른 코덱(%s)을 받는다", want, got,
+                                        extra={"event": "codec_differs", "channel_id": self.channel_id,
+                                               "platform": self.platform_id, "session_id": sid})
+                    await self.db(self.store.update_session, sid, first_media_time=ev.get("first_media_time"), **codec_fields)
                     await self.clear_error(settings)  # 녹화가 시작됐다(첫 데이터)
                 elif kind == "exit":
                     exit_event.update(ev)
@@ -767,7 +831,9 @@ class ChannelWorker:
         if got_data and not eng.stopping:
             eng.schedule_finalize(sid)  # 감시를 막지 않는다
         return RecResult(kind, got_data, last.get("last_media_time"), sid, detail, final.name,
-                         float(last.get("media_seconds") or 0.0), rc)
+                         float(last.get("media_seconds") or 0.0), rc,
+                         codec=str(exit_event.get("codec") or last.get("codec") or ""),
+                         next_codec=str(exit_event.get("next_codec") or ""))
 
     async def _terminate(self, proc: asyncio.subprocess.Process, waiter: asyncio.Task) -> None:
         """프로세스 그룹에 종료 신호를 보내고, 안 끝나면 강제 종료한다."""
@@ -1120,7 +1186,7 @@ class Engine:
                 "timemachine": bool(platform and platform.features.timemachine), "output_dir": folder, "quality": ch.quality,
                 # 꺼진 플랫폼의 채널: 화면이 "…가 꺼져 있습니다"를 보인다
                 "platform_off": off, "platform_note": (platform.opt_in_notice(self.cfg).get("off_label") if off else None),
-                "extension": ch.extension, "auto_record": ch.auto_record,
+                "extension": ch.extension, "auto_record": ch.auto_record, "video_codec": ch.video_codec,
                 "state": shown, "state_label": st.STATE_LABELS.get(shown, shown),
                 "live_title": state.get("live_title") if session else None,
                 "file": Path(session["final_path"]).name if session and session.get("final_path") else None,
@@ -1329,7 +1395,7 @@ class Engine:
             self._spawn_worker(ch.platform, ch.channel_id)
         self._note_cycle(ch.platform)
         self.events.emit("channel_added", ch.platform, ch.channel_id, name=ch.name, output_dir=ch.output_dir,
-                         quality=ch.quality, extension=ch.extension, auto_record=ch.auto_record)
+                         quality=ch.quality, extension=ch.extension, auto_record=ch.auto_record, video_codec=ch.video_codec)
         return ch
 
     async def update_channel(self, channel_id: str, platform_id: str | None = None, **changes: Any) -> st.Channel:

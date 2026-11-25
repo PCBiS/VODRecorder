@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from ...core import codec as codec_mod
 from ...core import httpread
 
 MAX_RESPONSE = 4 * 1024 * 1024  # API 응답 상한(압축을 푼 양)
@@ -147,6 +148,7 @@ def parse_tracks(media: Any) -> list[Track]:
                 fps=_float(t.get("videoFrameRate")),
                 bitrate=_int(t.get("videoBitRate")),
                 audio_only=bool(t.get("audioOnly")),
+                codec=codec_mod.from_name(t.get("videoCodec")),
             )
         )
     return out

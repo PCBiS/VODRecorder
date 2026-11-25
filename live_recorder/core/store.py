@@ -20,6 +20,7 @@ from . import secretstore
 from .config import ConfigError, Settings, stored_pattern_problem
 from ..platforms import registry
 from . import naming
+from . import codec as codec_mod
 from . import quality as quality_mod
 
 log = logging.getLogger("live_recorder.store")
@@ -39,6 +40,12 @@ SESSION_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("quality_label", "TEXT"),
     ("url_refreshes", "INTEGER"),
     ("finalize_retries", "INTEGER NOT NULL DEFAULT 0"),
+)
+# 버전을 올리지 않고 더하는 열(값이 없어도 되는 열만). 열 때마다 없는 것을 더한다.
+# 이전 빌드는 이 열을 읽지도 쓰지도 않으므로, 이 열이 생긴 저장소를 이전 빌드로 그대로 열 수 있다.
+COMPAT_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("channels", "video_codec", "TEXT"),  # 코덱 우선순위. 비면 기본값(h264)
+    ("sessions", "video_codec", "TEXT"),  # 이 파일에 받은 영상 코덱
 )
 
 # 채널 상태
@@ -67,6 +74,7 @@ CREATE TABLE IF NOT EXISTS channels (
     extension TEXT NOT NULL CHECK (extension IN ('.ts', '.mp4')),
     auto_record INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
+    video_codec TEXT,
     PRIMARY KEY (platform, channel_id)
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -114,7 +122,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     quality_label TEXT,
     url_refreshes INTEGER,
     finalize_retries INTEGER NOT NULL DEFAULT 0,
-    platform TEXT NOT NULL DEFAULT '{DEFAULT_PLATFORM}'
+    platform TEXT NOT NULL DEFAULT '{DEFAULT_PLATFORM}',
+    video_codec TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_channel_v4 ON sessions (platform, channel_id, id);
 CREATE TABLE IF NOT EXISTS control (
@@ -186,6 +195,7 @@ class Channel:
     extension: str
     auto_record: bool
     platform: str = DEFAULT_PLATFORM
+    video_codec: str = codec_mod.DEFAULT_PREFERENCE  # 코덱 우선순위(h264·hevc·av1·any)
 
 
 # 저장 폴더로 쓸 수 없는 폴더. 자료 폴더 아래 전체와 로그 폴더 아래 전체.
@@ -227,6 +237,22 @@ def resolve_output_dir(record_root: Path, value: str) -> Path:
     return resolved
 
 
+def normalize_codec_preference(value: object) -> str:
+    """채널의 코덱 우선순위. 비면 기본값."""
+    try:
+        return codec_mod.normalize_preference(value)
+    except ValueError as e:
+        raise ValidationError(str(e)) from None
+
+
+def _stored_codec_preference(value: object) -> str:
+    """저장된 값을 읽는다. 비었거나 모르는 값이면 기본값으로 읽는다(멈추지 않는다)."""
+    try:
+        return codec_mod.normalize_preference(value)
+    except ValueError:
+        return codec_mod.DEFAULT_PREFERENCE
+
+
 def normalize_extension(value: str) -> str:
     ext = (value or "").strip().lower()
     if ext and not ext.startswith("."):
@@ -261,6 +287,7 @@ class Store:
             if version is not None and version < SCHEMA_VERSION:
                 self._migrate(version)
             self._db.executescript(SCHEMA)
+            self._ensure_compat_columns()
             if self._version() is None:
                 self._db.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
             self._ensure_installed_at()
@@ -273,6 +300,13 @@ class Store:
             pass
         self._pattern_warned: str | None = None
         self.filename_pattern_problem()  # 뜰 때 저장된 패턴을 쓸 수 없으면 경고를 남긴다
+
+    def _ensure_compat_columns(self) -> None:
+        """버전과 상관없이 없는 열만 더한다. 기존 행은 빈 값이다."""
+        for table, name, decl in COMPAT_COLUMNS:
+            cols = {r[1] for r in self._db.execute(f"PRAGMA table_info({table})")}
+            if name not in cols:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
     def _ensure_installed_at(self) -> None:
         """처음 설치한 시각을 한 번만 적는다. 이 값이 없던 저장소는 가장 이른 채널 등록·녹화 시작 시각으로 채운다."""
@@ -395,7 +429,7 @@ class Store:
     @staticmethod
     def _channel(row: sqlite3.Row) -> Channel:
         return Channel(row["channel_id"], row["name"], row["output_dir"], row["quality"], row["extension"], bool(row["auto_record"]),
-                       row["platform"])
+                       row["platform"], _stored_codec_preference(row["video_codec"]))
 
     def resolve_platform(self, channel_id: str, platform: str | None) -> str:
         """플랫폼을 적지 않은 요청: 그 채널 ID를 가진 채널의 플랫폼(기본 플랫폼 먼저). 없으면 기본 플랫폼."""
@@ -406,7 +440,8 @@ class Store:
         return row["platform"] if row else DEFAULT_PLATFORM
 
     def add_channel(self, channel_id: str, name: str, output_dir: str | None = None, quality: str = "best",
-                    extension: str = ".mp4", auto_record: bool = True, platform: str | None = None) -> Channel:
+                    extension: str = ".mp4", auto_record: bool = True, platform: str | None = None,
+                    video_codec: str | None = None) -> Channel:
         platform = platform or DEFAULT_PLATFORM
         plat = registry.find(platform)
         if plat is None:
@@ -424,12 +459,14 @@ class Store:
         folder = resolve_output_dir(self.record_root, output_dir)
         ext = normalize_extension(extension)
         self._check_ts_needs_remux(ext)
+        codec_pref = normalize_codec_preference(video_codec)
         try:
             with self.tx() as db:
                 db.execute(
-                    "INSERT INTO channels (platform, channel_id, name, output_dir, quality, extension, auto_record, created_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (platform, channel_id, name, str(folder), quality_mod.normalize(quality), ext, int(bool(auto_record)), now_iso()),
+                    "INSERT INTO channels (platform, channel_id, name, output_dir, quality, extension, auto_record, created_at,"
+                    " video_codec) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (platform, channel_id, name, str(folder), quality_mod.normalize(quality), ext, int(bool(auto_record)), now_iso(),
+                     codec_pref),
                 )
         except sqlite3.IntegrityError:
             raise ValidationError("이미 등록된 채널 ID입니다") from None
@@ -451,7 +488,7 @@ class Store:
 
     def update_channel(self, channel_id: str, platform: str | None = None, **changes: Any) -> Channel:
         platform = self.resolve_platform(channel_id, platform)
-        allowed = {"name", "output_dir", "quality", "extension", "auto_record"}
+        allowed = {"name", "output_dir", "quality", "extension", "auto_record", "video_codec"}
         unknown = set(changes) - allowed
         if unknown:
             raise ValidationError(f"바꿀 수 없는 항목: {sorted(unknown)}")  # 채널 ID는 못 바꾼다
@@ -472,6 +509,8 @@ class Store:
                 self._check_ts_needs_remux(value)
             elif key == "auto_record":
                 value = int(bool(value))
+            elif key == "video_codec":
+                value = normalize_codec_preference(value)
             sets.append(f"{key}=?")
             args.append(value)
         if sets:

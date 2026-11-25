@@ -135,7 +135,7 @@ def _settings(cfg: AppConfig, store: st.Store) -> dict[str, Any]:
     for values in extensions.settings_snapshot(store).values():  # 켠 확장의 설정도 같은 자리에(이전 빌드와 같은 꼴)
         out.update(values)
     channels = store.list_channels()
-    out["channels"] = [{"index": i, "quality": c.quality, "extension": c.extension, "auto_record": c.auto_record}
+    out["channels"] = [{"index": i, "quality": c.quality, "extension": c.extension, "auto_record": c.auto_record, "video_codec": c.video_codec}
                        for i, c in enumerate(channels, 1)]
     out["secrets"] = {"cookies": credentials.exists(cfg), "telegram": cfg.telegram_path.exists(),
                       "account": cfg.account_path.exists(), "setup_code": cfg.setup_code_path.exists()}  # 있는지만

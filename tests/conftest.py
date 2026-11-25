@@ -73,6 +73,28 @@ def media(tools, tmp_path_factory) -> Path:
     return out
 
 
+@pytest.fixture(scope="session")
+def hevc_media(tools, tmp_path_factory) -> Path:
+    """시험. `media`와 같은 꼴(1초짜리 fMP4 조각)의 HEVC 조각 150개. 조각 번호와 시각이 `media`와 맞는다."""
+    encoders = subprocess.run([tools[0], "-hide_banner", "-encoders"], capture_output=True, text=True).stdout
+    if "libx265" not in encoders:
+        pytest.skip("HEVC 인코더(libx265)가 없는 ffmpeg다")
+    out = tmp_path_factory.mktemp("media_hevc")
+    subprocess.run(
+        [tools[0], "-nostdin", "-hide_banner", "-loglevel", "error",
+         "-f", "lavfi", "-i", "testsrc=size=160x90:rate=10",
+         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=22050",
+         "-t", "150", "-c:v", "libx265", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-tag:v", "hvc1",
+         "-x265-params", "keyint=10:min-keyint=10:scenecut=0:log-level=error", "-c:a", "aac", "-b:a", "24k",
+         "-f", "hls", "-hls_time", "1", "-hls_list_size", "0", "-hls_segment_type", "fmp4",
+         "-hls_fmp4_init_filename", "init.mp4", "-hls_segment_filename", str(out / "seg%05d.m4s"),
+         str(out / "all.m3u8")],
+        check=True, cwd=out,
+    )
+    assert (out / "init.mp4").exists() and len(list(out.glob("seg*.m4s"))) >= 145
+    return out
+
+
 def id3_timestamp(pts90k: int) -> bytes:
     """HLS 묶음 음성(packed audio) 조각 앞의 ID3 머리말(com.apple.streaming.transportStreamTimestamp)."""
     owner = b"com.apple.streaming.transportStreamTimestamp\x00"
@@ -162,6 +184,12 @@ class FakeChzzk:
         self.extra_post = None  # POST가 끼어드는 자리(path, headers, body) -> (상태, [(머리글, 값)…], 본문) | None
         self.split: Path | None = None  # 영상·음성을 따로 두는 마스터(split_media 조각)
         self.audio_frozen: int | None = None  # 따로 두는 음성 재생목록을 이 조각 수에서 멈춘다
+        # HEVC를 함께 내놓는 방송. hevc_dir이 없으면 예전 그대로다(코덱 표시가 없는 재생 정보)
+        self.hevc_dir: Path | None = None
+        self.hevc_offered = True  # 끄면 방송 정보와 재생목록에서 HEVC가 사라지고 HEVC 변형 주소는 404가 된다
+        self.h264_1080 = True  # 끄면 1080p는 HEVC뿐이다
+        self.hevc_frozen: int | None = None  # HEVC가 목록에서 사라지고, HEVC 재생목록은 이 조각 수에서 멈춘다(404가 아니다)
+        self.inline_switch: int | None = None  # HEVC 재생목록 안에서 이 조각부터 H.264 초기화 조각·조각으로 바뀐다
         # 가짜 텔레그램
         self.tg_messages: list[dict] = []
         self.tg_paths: list[str] = []
@@ -215,6 +243,20 @@ class FakeChzzk:
 
     # ---- 응답 만들기 ----
     def _tracks(self) -> list[dict]:
+        if self.hevc_dir is not None:
+            def track(tid: str, height: int, rate: int, codec: str) -> dict:
+                return {"encodingTrackId": tid, "videoHeight": height, "videoFrameRate": "60.0", "videoBitRate": rate,
+                        "videoCodec": codec, "audioOnly": None}
+
+            out = []
+            if self.hevc_listed:
+                out.append(track("1080p-hevc", 1080, 8000000, "HEVC"))  # 실측: HEVC가 먼저 나온다
+            if self.h264_1080:
+                out.append(track("1080p", 1080, 8000000, "H264"))
+            out.append(track("720p", 720, 3000000, "H264"))
+            out.append({"encodingTrackId": "audioOnly", "videoHeight": None, "videoFrameRate": None, "videoBitRate": None,
+                        "audioCodec": "AAC", "audioOnly": True})
+            return out
         return [
             {"encodingTrackId": "720p", "videoHeight": 720, "videoFrameRate": "30.0", "videoBitRate": 3000000, "audioOnly": None},
             {"encodingTrackId": "1080p", "videoHeight": 1080, "videoFrameRate": "60.0", "videoBitRate": 8000000, "audioOnly": None},
@@ -259,18 +301,43 @@ class FakeChzzk:
             return 404, {"code": 404, "message": "존재하지 않는 라이브입니다."}
         return 200, {"code": 200, "content": {"openDate": "", "playback": self._playback(b, "tm")}}
 
-    def media_playlist(self, b: Broadcast, kind: str) -> str:
+    @property
+    def hevc_listed(self) -> bool:
+        return self.hevc_offered and self.hevc_frozen is None
+
+    def codec_master(self) -> str:
+        """1080p에 HEVC와 H.264를 같은 대역폭으로 함께 내놓는 마스터 재생목록(HEVC가 먼저)."""
+        lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-INDEPENDENT-SEGMENTS"]
+        if self.hevc_listed:
+            lines += ['#EXT-X-STREAM-INF:BANDWIDTH=8192000,CODECS="hvc1.1.2.L123.90,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60.00',
+                      "v1080h/media.m3u8"]
+        if self.h264_1080:
+            lines += ['#EXT-X-STREAM-INF:BANDWIDTH=8192000,CODECS="avc1.64002A,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60.00',
+                      "v1080/media.m3u8"]
+        lines += ['#EXT-X-STREAM-INF:BANDWIDTH=3192000,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=60.00',
+                  "v720/media.m3u8"]
+        return "\n".join(lines) + "\n"
+
+    def media_playlist(self, b: Broadcast, kind: str, variant: str = "") -> str:
         n = b.published()
+        hevc = variant == "v1080h"
+        if hevc and self.hevc_frozen is not None:
+            n = min(n, self.hevc_frozen)
+        switch = self.inline_switch if hevc else None
         window = self.live_window if kind == "live" else self.tm_window
         first = max(0, n - window)
+        alt = switch is not None and first >= switch
         lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:1", f"#EXT-X-MEDIA-SEQUENCE:{first}",
-                 '#EXT-X-MAP:URI="init.mp4"']
+                 '#EXT-X-MAP:URI="alt/init.mp4"' if alt else '#EXT-X-MAP:URI="init.mp4"']
         if self.encrypted:
             lines.append('#EXT-X-KEY:METHOD=AES-128,URI="key.bin"')
         for i in range(first, n):
+            if switch is not None and i == switch and not alt:
+                alt = True
+                lines += ["#EXT-X-DISCONTINUITY", '#EXT-X-MAP:URI="alt/init.mp4"']
             lines.append("#EXT-X-PROGRAM-DATE-TIME:" + b.pdt(i).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
             lines.append("#EXTINF:1.000000,")
-            lines.append(f"seg{i:05d}.m4s")
+            lines.append(f"alt/seg{i:05d}.m4s" if alt else f"seg{i:05d}.m4s")
         if b.ended:
             lines.append("#EXT-X-ENDLIST")
         return "\n".join(lines) + "\n"
@@ -405,17 +472,27 @@ class FakeChzzk:
                             if not name.startswith(track) or int(name[1:6]) >= limit:
                                 return self._send(404, b"not yet", "text/plain")
                             return self._send(200, (server.split / name).read_bytes(), "video/mp2t")
+                        if parts[3] == "master.m3u8" and server.hevc_dir is not None:
+                            return self._send(200, server.codec_master().encode(), "application/vnd.apple.mpegurl")
+                        media_dir = server.media_dir
+                        if parts[3] == "v1080h":
+                            if server.hevc_dir is None or not server.hevc_offered:
+                                return self._send(404, b"gone", "text/plain")
+                            media_dir = server.hevc_dir
+                            if len(parts) > 5 and parts[4] == "alt":  # 같은 재생목록 안에서 바뀐 H.264 조각
+                                media_dir = server.media_dir
+                                parts = parts[:4] + parts[5:]
                         if parts[3] == "master.m3u8":
                             text = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=3192000,RESOLUTION=1280x720\nv720/media.m3u8\n"
                                     "#EXT-X-STREAM-INF:BANDWIDTH=8384000,RESOLUTION=1920x1080\nv1080/media.m3u8\n")
                             return self._send(200, text.encode(), "application/vnd.apple.mpegurl")
                         name = parts[4]
                         if name == "media.m3u8":
-                            return self._send(200, server.media_playlist(b, kind).encode(), "application/vnd.apple.mpegurl")
+                            return self._send(200, server.media_playlist(b, kind, parts[3]).encode(), "application/vnd.apple.mpegurl")
                         if name == "init.mp4" or name.startswith("seg"):
                             if name.startswith("seg") and int(name[3:8]) >= b.published():
                                 return self._send(404, b"not yet", "text/plain")
-                            return self._send(200, (server.media_dir / name).read_bytes(), "video/mp4")
+                            return self._send(200, (media_dir / name).read_bytes(), "video/mp4")
                     return self._send(404, b"{}")
                 except (BrokenPipeError, ConnectionResetError):
                     pass

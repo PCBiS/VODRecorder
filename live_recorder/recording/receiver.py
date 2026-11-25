@@ -7,6 +7,9 @@
 - 표준 출력에는 한 줄에 JSON 하나씩 진행 이벤트를 낸다. 표준 오류는 사람이 읽는 로그다.
   어느 쪽에도 쿠키와 토큰이 든 주소를 쓰지 않는다.
 - 조각(fMP4면 초기화 조각 포함)을 받은 순서대로 출력 파일 끝에 붙인다.
+- 영상 코덱은 처음 받은 것으로 고정한다. 변형은 작업의 `want_codec`·`codec_prefer`와 `CODECS`로 고르고,
+  실제 코덱은 초기화 조각에서 읽는다. 받는 중에 코덱이 달라지면 그 조각을 쓰지 않고 `codec_changed`로 정상 종료한다.
+  코어가 새 파일로 이어 받는다. 한 파일에 두 코덱을 이어 붙이지 않는다.
 - 마스터 재생목록이 음성을 따로 두면(`EXT-X-MEDIA TYPE=AUDIO`에 URI) 음성 재생목록도 같은 프로세스에서 받아
   `audio_output`(없으면 `<output>`에서 정한 음성 원본 이름)에 쓴다. 합치기는 마무리가 한다.
 - 수신기는 HLS만 안다. 주소 갱신, 스트림 요청 머리글, 조각 토큰은 작업에 적힌 플랫폼 모듈(`platform_module`)의
@@ -39,6 +42,7 @@ from urllib.parse import urljoin
 
 import httpx
 
+from ..core import codec as codec_mod
 from ..core import httpread
 
 MAX_PLAYLIST = 4 * 1024 * 1024  # 재생목록 응답 상한
@@ -55,6 +59,14 @@ _ATTR = re.compile(r'([A-Z0-9-]+)=("[^"]*"|[^,]*)')
 
 class Unsupported(Exception):
     pass
+
+
+class CodecChanged(Exception):
+    """받던 것과 다른 영상 코덱을 만났다."""
+
+    def __init__(self, codec: str):
+        super().__init__(codec)
+        self.codec = codec
 
 
 class PlaylistHTTPError(Exception):
@@ -90,6 +102,7 @@ class Variant:
     bandwidth: int
     height: int | None
     audio: str | None = None  # EXT-X-STREAM-INF의 AUDIO 묶음 이름
+    codec: str = ""  # CODECS에서 읽은 영상 코덱(h264·hevc·av1). 없으면 빈 문자열
 
 
 @dataclass
@@ -134,17 +147,31 @@ def parse_master(text: str, base_url: str) -> list[Variant]:
                 bw = int(pending.get("BANDWIDTH", "0"))
             except ValueError:
                 bw = 0
-            out.append(Variant(urljoin(base_url, line), bw, height, pending.get("AUDIO") or None))
+            out.append(Variant(urljoin(base_url, line), bw, height, pending.get("AUDIO") or None,
+                               codec_mod.from_codecs_attr(pending.get("CODECS"))))
             pending = None
     return out
 
 
-def choose_variant(variants: list[Variant], want_height: int | None) -> Variant:
-    """같은 높이가 있으면 그중 대역폭이 가장 높은 것, 없으면 전체에서 가장 높은 것."""
+def choose_variant(variants: list[Variant], want_height: int | None, want_codec: str = "", prefer: str = "") -> Variant:
+    """같은 높이가 있으면 그 가운데서, 없으면 전체에서 고른다.
+
+    먼저 정해진 코덱(`want_codec`)의 변형만 남긴다. 그런 변형이 없으면 우선순위(`prefer`)의 변형만 남기고,
+    그것도 없으면 있는 것을 다 본다. 남은 것 가운데 대역폭이 가장 높은 것, 같으면 재생목록에 먼저 나온 것이다."""
     if not variants:
         raise Unsupported("variant가 없는 마스터 재생목록")
-    same = [v for v in variants if want_height and v.height == want_height]
-    return max(same or variants, key=lambda v: v.bandwidth)
+    pool = [v for v in variants if want_height and v.height == want_height] or list(variants)
+    for key in (want_codec, prefer):
+        if key and key != codec_mod.ANY:
+            subset = [v for v in pool if v.codec == key]
+            if subset:
+                pool = subset
+                break
+    best = pool[0]
+    for v in pool[1:]:
+        if v.bandwidth > best.bandwidth:
+            best = v
+    return best
 
 
 def parse_audio_groups(text: str, base_url: str) -> dict[str, list[Rendition]]:
@@ -223,7 +250,9 @@ def parse_media(text: str, base_url: str) -> MediaPlaylist:
 def start_index(segments: list[Segment], *, rewind: float, start_after: datetime | None, live_edge: int) -> int:
     """첫 조각을 정한다.
 
-    - start_after가 있으면 그 시각부터의 첫 조각(이어받기).
+    - start_after가 있으면 그 시각부터의 첫 조각(이어받기). 조각의 가운데가 그 시각 뒤인 첫 조각이다.
+      재생목록의 시각은 밀리초로 적히고 앞 파일의 끝 시각은 조각 길이(예: 2.002초)를 더한 값이라, 다음 조각의 시각이
+      끝 시각보다 몇 마이크로초 앞설 수 있다. 시각을 그대로 견주면 그 조각을 건너뛴다.
     - rewind가 있으면 목록 끝에서 그만큼 거슬러 간 조각. 목록이 더 짧으면 목록 처음.
     - 둘 다 없으면 끝에서 live_edge번째 조각.
     """
@@ -231,7 +260,8 @@ def start_index(segments: list[Segment], *, rewind: float, start_after: datetime
         return 0
     if start_after is not None and all(s.pdt for s in segments):
         for i, s in enumerate(segments):
-            if s.pdt >= start_after:  # type: ignore[operator]  # start_after는 앞 파일 마지막 조각의 끝 시각
+            # start_after는 앞 파일 마지막 조각의 끝 시각
+            if s.pdt + timedelta(seconds=s.duration / 2) > start_after:  # type: ignore[operator]
                 return i
         return len(segments)
     if rewind > 0:
@@ -304,6 +334,10 @@ class Receiver:
         self.audio_output = str(job.get("audio_output") or audio_part(self.output))
         self.master_url = str(job["master_url"])
         self.want_height = job.get("want_height")
+        self.want_codec = str(job.get("want_codec") or "")  # 코어가 정한 코덱
+        self.codec_prefer = str(job.get("codec_prefer") or "")  # 그 코덱의 변형이 없을 때 볼 우선순위
+        self.codec = ""  # 이 파일에 받고 있는 영상 코덱. 처음 받은 것으로 고정한다
+        self.codec_next = ""  # 바뀐 코덱(이 값이 있으면 이 회차를 끝낸다)
         self.rewind = float(job.get("rewind_seconds") or 0)
         self.start_after = parse_pdt(job["start_after"]) if job.get("start_after") else None
         self.refresh_spec = job.get("refresh") or None
@@ -398,7 +432,11 @@ class Receiver:
         text = self._get_text(master_url)
         audio_url: str | None = None
         if is_master(text):
-            self.variant = choose_variant(parse_master(text, master_url), self.want_height)
+            variant = choose_variant(parse_master(text, master_url), self.want_height,
+                                     self.codec or self.want_codec, self.codec_prefer)
+            if self.codec and variant.codec and variant.codec != self.codec:
+                raise CodecChanged(variant.codec)  # 받던 코덱의 변형이 없어졌다. 이어 붙이지 않는다
+            self.variant = variant
             media_url = self.variant.uri
             audio_url = choose_audio(parse_audio_groups(text, master_url), self.variant.audio)
         else:
@@ -433,6 +471,10 @@ class Receiver:
             except BroadcastChanged as e:
                 self.log(f"다른 방송으로 바뀌었습니다: {e}")
                 self.changed = True
+                self.emit("refresh", reason=reason, ok=False)
+                return False
+            except CodecChanged as e:
+                self._note_codec_change(e.codec)
                 self.emit("refresh", reason=reason, ok=False)
                 return False
             except (httpx.HTTPError, ApiError, PlaylistHTTPError, Unsupported) as e:
@@ -525,8 +567,16 @@ class Receiver:
                         pass
             self.client.close()
 
-    def _exit(self, code: int, reason: str) -> int:
-        self.emit("exit", code=code, reason=reason, **self._snapshot())
+    def _note_codec_change(self, new: str) -> None:
+        self.codec_next = new
+        self.log(f"영상 코덱이 바뀌었습니다: {codec_mod.label(self.codec)} → {codec_mod.label(new)}. 이 파일은 여기서 끝냅니다")
+
+    def _codec_exit(self) -> int:
+        """코덱이 바뀌어 이 회차를 정상으로 끝낸다. 코어가 새 파일로 잇는다."""
+        return self._exit(EXIT_OK, "codec_changed", codec=self.codec, next_codec=self.codec_next)
+
+    def _exit(self, code: int, reason: str, **extra: Any) -> int:
+        self.emit("exit", code=code, reason=reason, **extra, **self._snapshot())
         extra = f" audio_segments={self.audio.segments}" if self.audio else ""
         self.log(f"수신 종료: code={code} reason={reason} segments={self.video.segments}{extra} bytes={self.bytes}")
         return code
@@ -535,6 +585,8 @@ class Receiver:
         """주소 갱신이 실패했을 때의 종료. 다른 방송으로 바뀐 것이면 이 회차를 정상으로 끝낸다."""
         if self.changed:
             return self._exit(EXIT_OK, "broadcast_changed")
+        if self.codec_next:
+            return self._codec_exit()
         return self._exit(EXIT_PLAYLIST, reason)
 
     def _todo(self, track: Track, segs: list[Segment]) -> list[Segment] | None:
@@ -608,9 +660,21 @@ class Receiver:
                         if self.stop.is_set():
                             break
                         raise Unsupported("초기화 조각을 받을 수 없습니다")
+                    if track.kind == "video":
+                        found = codec_mod.from_init(init)
+                        if found and self.codec and found != self.codec:
+                            raise CodecChanged(found)  # 쓰지 않고 끝낸다
+                        if found and not self.codec:
+                            if self.variant and self.variant.codec and self.variant.codec != found:
+                                self.log(f"재생목록이 밝힌 코덱({codec_mod.label(self.variant.codec)})과 받은 코덱"
+                                         f"({codec_mod.label(found)})이 다릅니다. 받은 것을 따릅니다")
+                            self.codec = found
                     self._write(track, init)
                     track.last_map = seg.map_uri
                 data = self._download(seg.uri, what=f"{track.label}조각 {seg.seq}")
+            except CodecChanged as e:
+                self._note_codec_change(e.codec)
+                return "exit", self._codec_exit()
             except SegmentAuthError:
                 if track.auth_failed_seq == seg.seq:
                     data = None  # 갱신해도 거부되면 건너뛴다
@@ -634,8 +698,11 @@ class Receiver:
                 track.last_end = seg.pdt + timedelta(seconds=seg.duration)
             if track.kind == "video" and not self._started:
                 self._started = True
+                if not self.codec and self.variant:
+                    self.codec = self.variant.codec  # 초기화 조각이 없는 스트림(MPEG-TS)은 재생목록이 밝힌 코덱을 따른다
                 self.emit(
                     "start",
+                    codec=self.codec,
                     start_seq=seg.seq,
                     first_media_time=seg.pdt.isoformat() if seg.pdt else None,
                     height=self.variant.height if self.variant else None,
@@ -695,7 +762,7 @@ class Receiver:
         while not self.stop.is_set():
             if self.refresh_spec and time.monotonic() - self.url_time > self.refresh_after:
                 if not self._refresh("scheduled"):
-                    if self.changed:
+                    if self.changed or self.codec_next:
                         return self._refresh_failed("scheduled")
                     self.url_time = time.monotonic()  # 다음 주기에 다시 해 본다. 지금 주소는 계속 쓴다
             again: float | None = None

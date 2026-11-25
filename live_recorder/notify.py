@@ -29,6 +29,7 @@ EVENTS: dict[str, tuple[str, bool]] = {
     "start_failed": ("녹화 시작 실패", True),
     "abnormal_end": ("비정상 종료", True),
     "timemachine_fallback": ("타임머신 실패, 일반 수신 전환", True),
+    "codec_changed": ("녹화 중 영상 코덱 바뀜", True),
     "finalize_failed": ("마무리 실패", True),
     "disk_low": ("디스크 부족으로 녹화 거부", True),
     "cookie_expired": ("쿠키 만료", True),

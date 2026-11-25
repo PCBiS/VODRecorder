@@ -155,6 +155,8 @@ function sessionRow(s, marks, now) {
   ];
   // 타임머신이 없는 플랫폼의 기록에는 수신 방식(타임머신·일반)을 내지 않는다
   if (s.timemachine !== false) facts.splice(1, 0, ["수신 방식", s.source === "timemachine" ? "타임머신" : s.source === "live" ? "일반" : "-"]);
+  // 이 파일에 받은 영상 코덱
+  if (s.video_codec) facts.splice(1, 0, ["영상 코덱", { h264: "H.264", hevc: "HEVC", av1: "AV1", vp9: "VP9" }[s.video_codec] || s.video_codec]);
   if (!viewOnly && s.end_detail) facts.push(["종료 상세", s.end_detail]);
   if (!viewOnly && s.note) facts.push(["메모", s.note]);
   const dl = el("dl", { class: "s-facts" });
