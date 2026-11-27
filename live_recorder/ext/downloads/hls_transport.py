@@ -60,8 +60,19 @@ def is_signed_naver_hls(url):
         return False
 
 
-def _media_url(parent, child, inherit_query=True):
+def _unsigned_origin(url, check_url):
+    """서명 질의가 없는 HLS(빠른 다시보기)의 주소 검사. 네이버 서명을 물려주지 않으므로 pstatic.net으로 묶지 않고,
+    부른 쪽의 허용 호스트 검사(check_url)를 쓴다. 치지직 빠른 다시보기는 *.akamaized.net에서 온다."""
+    origin = _origin(url)  # https·443·사용자 정보 없음
+    check_url(url)
+    return origin
+
+
+def _media_url(parent, child, inherit_query=True, check_url=None):
     absolute = urljoin(parent, child)
+    if not inherit_query and check_url is not None:
+        _unsigned_origin(absolute, check_url)
+        return absolute
     child_origin = _naver_origin(absolute)
     if child_origin != _naver_origin(parent) or not inherit_query:
         return absolute
@@ -121,11 +132,17 @@ def safe_tag(line, rewrite_uri):
     return tag + ':' + ','.join(f'{name}={attrs[name]}' for name in allowed if name in attrs)
 
 
-def rewrite_media_playlist(content, manifest_url, inherit_query=True):
-    """조각 주소와 KEY/MAP 주소를 절대 주소로 바꾼다. 서명된 질의는 그대로 물려준다."""
+def rewrite_media_playlist(content, manifest_url, inherit_query=True, check_url=None):
+    """조각 주소와 KEY/MAP 주소를 절대 주소로 바꾼다. 서명된 질의는 그대로 물려준다.
+
+    check_url은 서명이 없는 받기(inherit_query=False)에서만 쓴다. 주면 재생목록과 모든 조각 주소를 그 검사로 본다.
+    서명된 받기는 언제나 pstatic.net만 받는다."""
     if inherit_query and not is_signed_naver_hls(manifest_url):
         raise ReplayFailure('protocol_denied')
-    _naver_origin(manifest_url)
+    if not inherit_query and check_url is not None:
+        _unsigned_origin(manifest_url, check_url)
+    else:
+        _naver_origin(manifest_url)
     if isinstance(content, bytes):
         if len(content) > MAX_MANIFEST_BYTES:
             raise ReplayFailure('invalid_media')
@@ -146,10 +163,10 @@ def rewrite_media_playlist(content, manifest_url, inherit_query=True):
     for raw in lines:
         line = raw.strip()
         if line and not line.startswith('#'):
-            line = _media_url(manifest_url, line, inherit_query)
+            line = _media_url(manifest_url, line, inherit_query, check_url)
             media_count += 1
         elif line.startswith(('#EXT-X-KEY:', '#EXT-X-MAP:')):
-            line = safe_tag(line, lambda uri: _media_url(manifest_url, uri, inherit_query))
+            line = safe_tag(line, lambda uri: _media_url(manifest_url, uri, inherit_query, check_url))
         output_size += len(line.encode('utf-8')) + 1
         if output_size > MAX_REWRITTEN_BYTES:
             raise ReplayFailure('invalid_media')
@@ -214,12 +231,12 @@ def _supports_extension_picky(ffmpeg):
 
 
 def run_signed_hls(input_url, output_file, section, ffmpeg, headers, subprocess_module, set_processes, clear_processes,
-                   inherit_query=True, on_progress=None, output_format=None):
+                   inherit_query=True, on_progress=None, output_format=None, check_url=None):
     if inherit_query and not is_signed_naver_hls(input_url):
         raise ReplayFailure('protocol_denied')
     before, after = _section_args(section)
     try:
-        payload = rewrite_media_playlist(_fetch_manifest(input_url, headers), input_url, inherit_query)
+        payload = rewrite_media_playlist(_fetch_manifest(input_url, headers), input_url, inherit_query, check_url)
     except ReplayFailure:
         raise
     except Exception as exc:

@@ -712,6 +712,12 @@ class Store:
             rows = self._all("SELECT * FROM sessions ORDER BY id DESC LIMIT ?", (limit,))
         return [dict(r) for r in reversed(rows)]
 
+    def last_session(self, channel_id: str, platform: str | None = None) -> dict[str, Any] | None:
+        """이 채널의 가장 최근 세션."""
+        platform = self.resolve_platform(channel_id, platform)
+        row = self._one("SELECT * FROM sessions WHERE platform=? AND channel_id=? ORDER BY id DESC LIMIT 1", (platform, channel_id))
+        return dict(row) if row else None
+
     def open_sessions(self) -> list[dict[str, Any]]:
         return [dict(r) for r in self._all("SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY id")]
 

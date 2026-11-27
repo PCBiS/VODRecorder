@@ -189,6 +189,7 @@ class SegmentDownloader:
         self.attempts = attempts
         self.timeout = timeout
         self.check_url = check_url or (lambda u: u)
+        self.host_check = check_url  # 주지 않으면 None: 서명 없는 재생목록도 hls_transport의 기본 호스트 검사를 쓴다
         self.fetched = 0  # 이 시도에서 받은 조각 수(시험이 본다)
         # 받는 중에 갈아 주는 요청 자격(예: 서명 쿠키). 있으면 재생목록을 이 모듈이 직접 받아 절대 주소로 바꾸고,
         # 요청마다 auth.headers(주소)를 더하며, 403이면 auth.renew() 뒤 한 번 다시 받는다. 없으면 예전 그대로다
@@ -330,7 +331,7 @@ class SegmentDownloader:
                 payload = rewrite_plain(raw, self.url, self.check_url)
             else:
                 raw = hls_transport._fetch_manifest(self.url, self.headers)
-                payload = hls_transport.rewrite_media_playlist(raw, self.url, self.signed)
+                payload = hls_transport.rewrite_media_playlist(raw, self.url, self.signed, self.host_check)
         except ReplayFailure:
             raise
         except Exception as exc:  # noqa: BLE001

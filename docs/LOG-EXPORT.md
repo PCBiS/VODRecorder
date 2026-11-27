@@ -132,7 +132,8 @@
 | engine | `disk_low` | ERROR | (값을 채운 문장. 틀 없음) `디스크 여유 부족: N MiB < M MiB` | 여유 공간·한도 | `channel_id`, `platform` |
 | engine | `timemachine_fallback` | WARNING | (값을 채운 문장. 틀 없음) `타임머신 실패(…). 일반 수신으로 전환` | API 오류 문장 | `channel_id`, `platform` |
 | engine | `codec_changed` | WARNING | `녹화 중 영상 코덱이 바뀌었다 %s → %s` | 앞뒤 코덱 이름(`h264`·`hevc`·`av1`) | `channel_id`, `platform`, `session_id` |
-| engine | `codec_change_gap` | WARNING | `코덱이 바뀌어 나눈 파일 사이가 %.1f초 비었다` | 빈 시간(초) | `channel_id`, `platform`, `session_id` |
+| engine | `codec_change_gap`, `restart_resume_gap` | WARNING | `나눈 파일 사이가 %.1f초 비었다` | 빈 시간(초). 코덱이 바뀌어 나눈 경우와, 서버가 다시 뜬 뒤 이어 받은 경우 | `channel_id`, `platform`, `session_id` |
+| engine | `restart_resume` | INFO | `서버가 다시 뜬 뒤 같은 방송을 앞 파일에 이어 받는다` | — | `channel_id`, `platform`, `session_id`(앞 세션), `live_id` |
 | engine | `codec_differs` | WARNING | `정한 코덱(%s)과 다른 코덱(%s)을 받는다` | 코덱 이름 | `channel_id`, `platform`, `session_id` |
 | engine | `url_refresh` | INFO | `재생 주소 갱신 %s ok=%s` | 갱신 까닭, 성공 여부 | `channel_id`, `platform`, `session_id` |
 | engine | `segment_gap` | WARNING | `조각 누락 %s개` | 빠진 조각 수 | `channel_id`, `platform`, `session_id` |

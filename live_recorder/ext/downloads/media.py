@@ -641,7 +641,7 @@ class FFmpegJob:
         hls_transport.run_signed_hls(
             url, out, text, self.ffmpeg, media_headers(), subprocess,
             lambda procs: self.processes.extend(procs), lambda: None,
-            inherit_query=signed, on_progress=self.progress, output_format="mp4")
+            inherit_query=signed, on_progress=self.progress, output_format="mp4", check_url=_check_url)
 
 
 def _hms(seconds: float) -> str:

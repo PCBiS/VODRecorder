@@ -64,6 +64,36 @@ class HlsTransportTests(unittest.TestCase):
         self.assertEqual(rewritten.count('SYNTHETIC'), 1)
         self.assertNotIn('duplicate=parent', rewritten)
 
+    def test_unsigned_playlist_uses_callers_host_check(self):
+        """빠른 다시보기(서명 질의 없음): 부른 쪽 허용 호스트로 본다(치지직은 *.akamaized.net에서 온다)."""
+        from live_recorder.ext.downloads import media
+        old = media.ALLOWED_HOSTS, media.MEDIA_HEADERS
+        media.configure(('pstatic.net', 'akamaized.net'), {})
+        try:
+            parent = 'https://light.akamaized.net/a/1080p/vod_chunklist.m3u8'
+            body = b'#EXTM3U\n#EXT-X-MAP:URI="init.m4s?type=hls"\n#EXTINF:2,\ns1.m4v\n#EXT-X-ENDLIST\n'
+            out = rewrite_media_playlist(body, parent, False, media.check_url).decode()
+            self.assertIn('https://light.akamaized.net/a/1080p/s1.m4v\n', out)
+            self.assertIn('URI="https://light.akamaized.net/a/1080p/init.m4s?type=hls"', out)
+            # 검사를 주지 않으면 예전처럼 pstatic.net만 받는다
+            with self.assertRaisesRegex(ReplayFailure, 'protocol_denied'):
+                rewrite_media_playlist(body, parent, False)
+            # 허용하지 않은 호스트, http, 다른 포트, 사용자 정보는 재생목록·조각 어디에 있어도 받지 않는다
+            for bad in ('https://evil.example/s1.m4v', 'http://light.akamaized.net/s1.m4v',
+                        'https://light.akamaized.net:8443/s1.m4v', 'https://u:p@light.akamaized.net/s1.m4v',
+                        'https://akamaized.net.evil.example/s1.m4v'):
+                with self.subTest(bad=bad), self.assertRaisesRegex(ReplayFailure, 'protocol_denied'):
+                    rewrite_media_playlist(body.replace(b's1.m4v', bad.encode()), parent, False, media.check_url)
+            with self.assertRaisesRegex(ReplayFailure, 'protocol_denied'):
+                rewrite_media_playlist(body, 'https://evil.example/a.m3u8', False, media.check_url)
+            # 서명된 받기는 검사를 주어도 pstatic.net만 받고, 서명 질의를 다른 호스트에 물려주지 않는다
+            with self.assertRaisesRegex(ReplayFailure, 'protocol_denied'):
+                rewrite_media_playlist(body, parent + '?_lsu_sa_=X', True, media.check_url)
+            with self.assertRaisesRegex(ReplayFailure, 'protocol_denied'):
+                rewrite_media_playlist(PLAYLIST.replace(b'a.ts', b'https://light.akamaized.net/b.ts'), PARENT, True, media.check_url)
+        finally:
+            media.configure(*old)
+
     def test_existing_signed_key_is_preserved_and_not_duplicated(self):
         result = rewrite_media_playlist(PLAYLIST.replace(b'a.ts', b'a.ts?_lsu_sa_=CHILD&policy=CHILD'), PARENT)
         self.assertIn(b'_lsu_sa_=CHILD&policy=CHILD&duplicate=parent', result)
