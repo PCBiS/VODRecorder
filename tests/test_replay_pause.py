@@ -285,6 +285,57 @@ def test_hls_segments_with_init_map_resume_in_process(server, vod_media, tmp_pat
     assert [e for e in events if e[0] == "resume"] == [("resume", {"mode": "restart", "reason": "changed"})] and third.fetched == 60
 
 
+def test_hls_segments_parallel_connections_match_sequential(server, vod_media, tmp_path, monkeypatch, tools):
+    """조각을 여러 연결로 함께 받아도 결과가 하나씩 받은 것과 같다. 끊긴 뒤(받은 조각이 띄엄띄엄 있어도) 이어받는다.
+    한 조각이 실패하면 전체가 실패하고, 그때까지 받은 조각은 남는다."""
+    fake = FakeVod(server, vod_media)
+    monkeypatch.setattr(vod, "ALLOW_LOCAL_HTTP", True)
+    monkeypatch.setattr(hls_transport, "ALLOW_LOCAL_HTTP", True)
+    url = f"{fake.base}/vod/fm4/{FAST_TOKEN}/media.m3u8"
+
+    def make(work, **kwargs):
+        work.mkdir(exist_ok=True)
+        return segments.SegmentDownloader(url, work, tools[0], None, False, "q1", vod.media_headers(), check_url=vod._check_url, **kwargs)
+
+    base = tmp_path / "base"
+    make(base).run(str(base / "video.mp4"))
+    par = tmp_path / "par"
+    seen = []
+    d = make(par, connections=8, on_progress=seen.append)
+    d.run(str(par / "video.mp4"))
+    assert d.fetched == 60 and sha(par / "video.mp4") == sha(base / "video.mp4")
+    assert seen == sorted(seen) and len(seen) == 60  # 진행률은 부른 스레드에서, 줄어들지 않게 알린다
+
+    def stop(value):
+        if value and value > 40:
+            raise RuntimeError("멈춤")
+
+    work = tmp_path / "w"
+    with pytest.raises(RuntimeError):
+        make(work, connections=8, on_progress=stop).run(str(work / "video.mp4"))
+    have = [p for p in (work / "seg").iterdir() if p.suffix == ".m4s"]
+    assert 0 < len(have) < 60
+    second = make(work, connections=8)
+    second.run(str(work / "video.mp4"))
+    assert second.fetched == 60 - len(have) and sha(work / "video.mp4") == sha(base / "video.mp4")
+
+    # 조각 하나가 계속 실패하면 전체가 실패한다
+    bad = tmp_path / "bad"
+    broken = make(bad, connections=8, attempts=1)
+    real = broken._fetch_file
+
+    def flaky(client, uri, index, ext):
+        if index == 30:
+            raise segments.ReplayFailure("not_found")
+        return real(client, uri, index, ext)
+
+    broken._fetch_file = flaky
+    with pytest.raises(segments.ReplayFailure) as e:
+        broken.run(str(bad / "video.mp4"))
+    assert e.value.code == "not_found" and not (bad / "video.mp4").exists()
+    assert 0 < len([p for p in (bad / "seg").iterdir() if p.suffix == ".m4s"]) < 60
+
+
 def test_playlist_parsing_rules():
     """조각 목록: 구간과 겹치는 조각만 고른다. 바이트 범위 조각은 이 방식으로 받지 않는다. 지문은 서명을 뺀다."""
     def playlist(query):
@@ -908,7 +959,7 @@ def test_hls_pauses_when_double_size_does_not_fit(tmp_path, server, tools, vod_m
     with Web(tmp_path, server, tools, extensions=REPLAY_EXTENSIONS, disk_free=lambda path: free["bytes"]) as w:
         w.fake = fake
         w.login()
-        w.call("PATCH", "/api/settings", json={"replay_min_free_bytes": 0})
+        w.call("PATCH", "/api/settings", json={"replay_min_free_bytes": 0, "replay_segment_connections": 1})  # 하나씩 받아야 받는 도중에 멈춘다
         a = analyze(w, [FAST])
         q = a["items"][0]["qualities"][0]["id"]
         size = sum(p.stat().st_size for p in (vod_media / "hls").glob("seg*.ts"))

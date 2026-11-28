@@ -5,6 +5,8 @@
         <label>저장 폴더(녹화 루트 아래)<input name="replay_dir" spellcheck="false"></label>
         <label>최소 여유 공간(GiB)<input name="replay_min_free_gib" type="number" min="0" step="0.5"></label>
         <label>동시 연결 수(1~16)<input name="replay_connections" type="number" min="1" max="16"></label>
+        <label>조각 동시 받기 수(1~16)<input name="replay_segment_connections" type="number" min="1" max="16"></label>
+        <p class="muted span2">조각 동시 받기 수는 방송 직후의 빠른 다시보기처럼 조각으로 나뉜 영상에 씁니다. 권장: 회선이 100Mbps 이하면 1~2, HDD는 2~4, SSD는 4~8, NVMe와 1Gbps 이상 회선이면 8~16. 조각마다 디스크에 확정해 쓰므로 저장소가 느리면 늘려도 빨라지지 않습니다. 다음 작업부터 적용됩니다.</p>
         <label class="check span2"><input name="replay_pause_while_recording" type="checkbox">실시간 녹화 중에는 다운로드를 멈춥니다(녹화와 마무리가 모두 끝나면 다시 받습니다)</label>
       </div>
       <h3>다운로드 허용 시간대(Asia/Seoul)</h3>

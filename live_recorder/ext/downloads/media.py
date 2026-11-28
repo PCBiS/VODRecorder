@@ -800,8 +800,8 @@ def download_split(video: Video, variant: Variant, out: str, ffmpeg: str, connec
 def download(video: Video, quality_id: str, section: tuple[float, float] | None, out: str, ffmpeg: str,
              connections: int, on_progress: Progress | None = None, on_stage: Callable[[str], None] | None = None,
              *, on_event: Callable[..., None] | None = None, on_bytes: Callable[[int, int | None], None] | None = None,
-             reanalyze: Callable[[], Video] | None = None) -> None:
-    """선택한 화질을 out(임시 파일)에 받는다. 검증과 이름 붙이기는 관리자(manager)가 한다.
+             reanalyze: Callable[[], Video] | None = None, segment_connections: int | None = None) -> None:
+    """선택한 화질을 out(임시 파일)에 받는다. segment_connections는 HLS형에서 함께 받는 조각 수(없으면 하나씩). 검증과 이름 붙이기는 관리자(manager)가 한다.
 
     out이 있는 작업 폴더에 지난 시도의 부분 파일이 있으면 이어받는다. 이어받을 수 없는 방식이거나
     부분 파일이 맞지 않으면 지우고 처음부터 받으며, on_event("resume", mode="restart", reason=…)로 알린다.
@@ -835,7 +835,8 @@ def download(video: Video, quality_id: str, section: tuple[float, float] | None,
     try:
         segments.SegmentDownloader(media, work, ffmpeg, section, variant.signed, variant.id, media_headers(),
                                    on_progress=on_progress, on_event=on_event, on_bytes=on_bytes, on_stage=on_stage,
-                                   check_url=_check_url, auth=video.auth).run(out)
+                                   check_url=_check_url, auth=video.auth,
+                                   connections=max(1, min(int(segment_connections or 1), int(video.max_connections or 16)))).run(out)
     except segments.Unsupported:
         if video.auth is not None:
             raise ReplayFailure("invalid_media") from None  # 자격을 가는 받기는 ffmpeg에 주소만 넘기는 방식으로 대신하지 않는다

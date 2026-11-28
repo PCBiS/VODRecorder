@@ -283,7 +283,12 @@ def test_settings_apply_immediately_and_refuse_while_busy(rp, tools):
     assert rp.call("PATCH", "/api/settings", json={"replay_connections": 2}).status_code == 200  # 다음 작업부터 적용
     rp.call("POST", f"/api/replay/jobs/{jobs[0]['id']}/cancel")
     rp.fake.delay = 0
-    for bad in ({"replay_dir": "../outside"}, {"replay_dir": "/etc"}, {"replay_connections": 0}, {"replay_connections": 17}):
+    # 조각 동시 받기 수: 기본 4, 1~16, 작업 프로세스에 넘긴다
+    assert rp.client.get("/api/settings").json()["settings"]["replay_segment_connections"] == 4
+    assert rp.call("PATCH", "/api/settings", json={"replay_segment_connections": 8}).status_code == 200
+    assert rp.app.state.extensions.contexts["downloads"].service._extras()["segment_connections"] == 8
+    for bad in ({"replay_dir": "../outside"}, {"replay_dir": "/etc"}, {"replay_connections": 0}, {"replay_connections": 17},
+                {"replay_segment_connections": 0}, {"replay_segment_connections": 17}):
         assert rp.call("PATCH", "/api/settings", json=bad).status_code == 400, bad
     assert rp.call("PATCH", "/api/settings", json={"replay_dir": "다른곳"}).status_code == 200
     a2 = analyze(rp, [DASH])

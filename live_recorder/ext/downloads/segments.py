@@ -9,6 +9,8 @@
   조각은 다 받은 조각이다. 받다 만 조각은 `.tmp`로 남아 다음 시도에서 지운다.
 - 이어받기 전에 확인한다: 같은 화질·구간이고, 재생목록 지문(조각 이름과 길이, 태그. 서명·주소 앞부분은 뺀다)이 같고,
   마지막으로 받은 조각을 서버에서 다시 받아 같은지 본다. 초기화 조각(EXT-X-MAP)도 다시 받아 견준다. 다르면 처음부터 받는다.
+- 조각은 `connections`개까지 함께 받는다(서버가 연결 하나의 속도를 묶어 둘 때 빨라진다). 조각 파일은 번호로 이름이 붙으므로
+  받는 차례가 섞여도 이어받기와 담기는 그대로다. 요청 자격을 갈아 주는 받기(auth)는 하나씩 받는다.
 - 구간 받기(DASH의 HLS형)는 구간과 겹치는 조각만 받고, 담을 때 ffmpeg가 구간을 자른다.
 - 바이트 범위 조각(EXT-X-BYTERANGE)과 비어 있는 조각(EXT-X-GAP)은 이 방식으로 받지 않는다(`Unsupported`).
   그때는 예전처럼 ffmpeg가 바로 받는다. 그 방식은 이어받을 수 없다.
@@ -23,6 +25,7 @@ import re
 import subprocess
 import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
@@ -173,7 +176,7 @@ class SegmentDownloader:
                  variant_id: str, headers: dict[str, str], *, on_progress: Callable[[float | None], None] | None = None,
                  on_event: Callable[..., None] | None = None, on_bytes: Callable[[int, int | None], None] | None = None,
                  on_stage: Callable[[str], None] | None = None, attempts: int = 8, timeout: float = 30.0,
-                 check_url: Callable[[str], str] | None = None, auth=None):
+                 check_url: Callable[[str], str] | None = None, auth=None, connections: int = 1):
         self.url = url
         self.work = Path(work)
         self.seg_dir = self.work / SEG_DIR
@@ -191,6 +194,8 @@ class SegmentDownloader:
         self.check_url = check_url or (lambda u: u)
         self.host_check = check_url  # 주지 않으면 None: 서명 없는 재생목록도 hls_transport의 기본 호스트 검사를 쓴다
         self.fetched = 0  # 이 시도에서 받은 조각 수(시험이 본다)
+        self.connections = max(1, int(connections))  # 함께 받는 조각 수
+        self._stop = threading.Event()  # 한 조각이 실패하면 나머지 받기를 그만둔다
         # 받는 중에 갈아 주는 요청 자격(예: 서명 쿠키). 있으면 재생목록을 이 모듈이 직접 받아 절대 주소로 바꾸고,
         # 요청마다 auth.headers(주소)를 더하며, 403이면 auth.renew() 뒤 한 번 다시 받는다. 없으면 예전 그대로다
         self.auth = auth
@@ -204,6 +209,9 @@ class SegmentDownloader:
         self.check_url(url)
         renewed = False
         for attempt in range(self.attempts):
+            stop = getattr(self, "_stop", None)
+            if stop is not None and stop.is_set():
+                raise ReplayFailure("engine_operation_failed")  # 다른 조각이 실패해 그만두는 중이다
             try:
                 sink(None)  # 비운다
                 size = 0
@@ -356,10 +364,16 @@ class SegmentDownloader:
             if have:
                 self._estimate(done_bytes, done_seconds, total_seconds)
             last_report = 0.0
-            for i in chosen:
-                if i in have:
-                    continue
+
+            def fetch(i: int) -> tuple[int, Path, int]:
+                if self._stop.is_set():
+                    raise ReplayFailure("engine_operation_failed")  # 그만두는 중이면 새 조각을 열지 않는다
                 path, size = self._fetch_file(client, playlist.segments[i]["uri"], i, playlist.segments[i]["ext"])
+                return i, path, size
+
+            def account(i: int, path: Path, size: int) -> None:
+                # 알림(on_progress 등)은 언제나 run()을 부른 스레드에서 한다
+                nonlocal done_seconds, done_bytes, last_report
                 have[i] = path
                 self.fetched += 1
                 done_seconds += playlist.segments[i]["duration"]
@@ -372,6 +386,34 @@ class SegmentDownloader:
                     if self.on_bytes:
                         self.on_bytes(done_bytes, None)
                     self._estimate(done_bytes, done_seconds, total_seconds)
+
+            todo = [i for i in chosen if i not in have]
+            self._stop.clear()
+            workers = 1 if self.auth is not None else min(self.connections, len(todo))
+            if workers <= 1:
+                for i in todo:
+                    account(*fetch(i))
+            else:
+                # 앞쪽 조각부터 workers개씩 함께 받는다. 맡겨 둔 조각은 workers의 두 배를 넘기지 않는다
+                pool = ThreadPoolExecutor(workers, thread_name_prefix="hls-seg")
+                try:
+                    rest = iter(todo)
+                    pending: set = set()
+                    while True:
+                        for i in rest:
+                            pending.add(pool.submit(fetch, i))
+                            if len(pending) >= workers * 2:
+                                break
+                        if not pending:
+                            break
+                        finished, pending = wait(pending, return_when=FIRST_COMPLETED)
+                        for f in finished:
+                            account(*f.result())
+                except BaseException:
+                    self._stop.set()
+                    raise
+                finally:
+                    pool.shutdown(wait=True, cancel_futures=True)  # 받던 조각이 끝나거나 그만둘 때까지 기다린다
             if self.on_bytes:
                 self.on_bytes(done_bytes, None)
         if self.on_stage:

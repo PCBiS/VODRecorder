@@ -49,6 +49,8 @@ SETTINGS = {
     "replay_dir": SettingSpec("replay", config.rel_dir, "저장 폴더", path=True),
     "replay_min_free_bytes": SettingSpec(5 * 1024**3, config.int_range(0, None), "최소 여유 공간"),
     "replay_connections": SettingSpec(16, config.int_range(1, 16), "동시 연결 수"),
+    # HLS형(조각으로 받는 다시보기)에서 함께 받는 조각 수. 조각마다 fsync하므로 저장소가 느리면 늘려도 빨라지지 않는다
+    "replay_segment_connections": SettingSpec(4, config.int_range(1, 16), "조각 동시 받기 수"),
     "replay_paused": SettingSpec(False, config.bool_value, "전체 일시정지"),
     "replay_window_enabled": SettingSpec(False, config.bool_value, "다운로드 시간대"),
     "replay_window_rules": SettingSpec((), _window_rules, "시간대 규칙", list_value=True),

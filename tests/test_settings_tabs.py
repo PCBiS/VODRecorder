@@ -30,7 +30,7 @@ FIELDS = {
     # 전역 확인 주기 칸(check_interval)은 플랫폼별 스캔 주기·채널 사이 간격으로 바뀌었다(플랫폼 줄은 따로 저장)
     "record": ["min_free_gib", "timemachine_enabled", "rewind_seconds", "remux_enabled", "delete_original",
                "filename_pattern"],
-    "replay": ["replay_dir", "replay_min_free_gib", "replay_connections", "replay_pause_while_recording",
+    "replay": ["replay_dir", "replay_min_free_gib", "replay_connections", "replay_segment_connections", "replay_pause_while_recording",
                "replay_window_enabled", "replay_window_end_action"],
     "notify": ["notify_enabled", "notify_dedupe_seconds"],
     "account": ["session_minutes", "login_limit_enabled", "trusted_proxies"],

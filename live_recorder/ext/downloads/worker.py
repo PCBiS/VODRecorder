@@ -110,7 +110,7 @@ def run_download(task: dict, work: Path) -> dict:
 
     media.download(video, quality, section, str(out), task.get("ffmpeg") or "ffmpeg",
                  int(task.get("connections") or 16), progress, lambda stage: emit("stage", stage=stage),
-                 on_event=event, on_bytes=received,
+                 on_event=event, on_bytes=received, segment_connections=int(task.get("segment_connections") or 4),
                  reanalyze=lambda: module.analyze(task["url"], *_api_args(task), **extra))
     return {"name": out.name}
 

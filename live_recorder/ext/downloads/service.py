@@ -59,7 +59,8 @@ class ReplayService:
 
     def _extras(self, platform_id: str | None = None) -> dict:
         settings = self.get_settings()
-        extras: dict[str, Any] = {"connections": settings.replay_connections}
+        extras: dict[str, Any] = {"connections": settings.replay_connections,
+                                  "segment_connections": settings.replay_segment_connections}
         platform = registry.find(platform_id) if platform_id else None
         if platform is not None:  # 작업 종류의 플랫폼. 자격은 플랫폼 자격 저장으로만 읽는다
             extras["cookies"] = credentials.load(self.cfg, platform.id)

@@ -432,6 +432,7 @@ registerSettingsPart("replay", {
       replay_dir: f.replay_dir.value.trim(),
       replay_min_free_bytes: Math.round(Number(f.replay_min_free_gib.value) * 1024 ** 3),
       replay_connections: Number(f.replay_connections.value),
+      replay_segment_connections: Number(f.replay_segment_connections.value),
       replay_pause_while_recording: f.replay_pause_while_recording.checked,
       replay_window_enabled: f.replay_window_enabled.checked,
       replay_window_end_action: f.replay_window_end_action.value,
@@ -444,6 +445,7 @@ registerSettingsPart("replay", {
     f.replay_dir.value = s.replay_dir;
     f.replay_min_free_gib.value = gib(s.replay_min_free_bytes);
     f.replay_connections.value = s.replay_connections;
+    f.replay_segment_connections.value = s.replay_segment_connections;
     // 녹화 중 멈춤과 다운로드 허용 시간대
     f.replay_pause_while_recording.checked = s.replay_pause_while_recording;
     f.replay_window_enabled.checked = s.replay_window_enabled;
