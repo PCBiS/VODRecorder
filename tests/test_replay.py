@@ -220,6 +220,50 @@ def test_cancel_removes_temp_and_retry_completes(rp, tools):
     assert rp.call("POST", f"/api/replay/jobs/{ident}/retry").status_code == 409  # 완료한 작업은 재시도하지 않는다
 
 
+def test_unfinished_job_history_can_be_removed(rp):
+    """실패·취소한 작업의 내역: 하나씩 지우거나 모두 지운다. 진행 중이거나 완료한 작업은 지우지 않는다. 7일 뒤에는 스스로 정리한다."""
+    from datetime import datetime, timedelta, timezone
+    manager = rp.app.state.extensions.contexts["downloads"].service.manager
+    rp.fake.delay = 0.05
+    a = analyze(rp, [DASH])
+    first = enqueue(rp, a, [{"url": DASH, "quality": "PD_90P_160_100_24"}], key="remove-key-0001")[0]["id"]
+    rp.wait(lambda: job(rp, first)["downloaded_bytes"] > 50_000, what="받는 중")
+    assert rp.call("DELETE", f"/api/replay/jobs/{first}").status_code == 409  # 받는 중인 작업은 지우지 않는다
+    assert rp.call("POST", f"/api/replay/jobs/{first}/cancel").json()["status"] == "cancelled"
+    counts = rp.client.get("/api/replay/jobs?status=failed").json()["counts"]
+    assert counts["failed"] == 1
+    r = rp.call("DELETE", f"/api/replay/jobs/{first}")
+    assert r.status_code == 200 and r.json() == {"removed": 1}
+    assert rp.client.get(f"/api/replay/jobs/{first}").status_code == 404
+    assert rp.client.get("/api/replay/jobs").json()["jobs"] == []
+    assert manager.db.execute("SELECT count(*) FROM logs WHERE job=?", (first,)).fetchone()[0] == 0
+    assert rp.call("DELETE", f"/api/replay/jobs/{first}").status_code == 404
+    # 모두 지우기: 취소한 것 둘은 지우고 완료한 것은 남긴다
+    ids = []
+    for n in range(2):
+        ident = enqueue(rp, a, [{"url": DASH, "quality": "PD_90P_160_100_24"}], key=f"remove-key-001{n}")[0]["id"]
+        rp.wait(lambda: job(rp, ident)["downloaded_bytes"] > 50_000, what="받는 중")
+        assert rp.call("POST", f"/api/replay/jobs/{ident}/cancel").json()["status"] == "cancelled"
+        ids.append(ident)
+    rp.fake.delay = 0
+    kept = enqueue(rp, a, [{"url": DASH, "quality": "PD_90P_160_100_24"}], key="remove-key-0020")[0]["id"]
+    assert wait_job(rp, kept)["status"] == "completed"
+    assert rp.call("DELETE", f"/api/replay/jobs/{kept}").status_code == 409  # 완료한 작업은 1시간 뒤 스스로 정리된다
+    r = rp.call("POST", "/api/replay/jobs/remove-unfinished")
+    assert r.status_code == 200 and r.json() == {"removed": 2}
+    assert [j["id"] for j in rp.client.get("/api/replay/jobs").json()["jobs"]] == [kept]
+    assert rp.call("POST", "/api/replay/jobs/remove-unfinished").json() == {"removed": 0}
+    # 7일이 지난 실패·취소 내역은 스스로 정리한다
+    old = enqueue(rp, a, [{"url": DASH, "quality": "PD_90P_160_100_24"}], key="remove-key-0030")[0]["id"]
+    rp.call("POST", f"/api/replay/jobs/{old}/cancel")
+    rp.wait(lambda: job(rp, old)["status"] in ("cancelled", "completed"), what="끝남")
+    if job(rp, old)["status"] == "cancelled":
+        manager.prune_completed(datetime.now(timezone.utc) + timedelta(days=6, hours=23))
+        assert rp.client.get(f"/api/replay/jobs/{old}").status_code == 200
+        manager.prune_completed(datetime.now(timezone.utc) + timedelta(days=7, seconds=5))
+        assert rp.client.get(f"/api/replay/jobs/{old}").status_code == 404
+
+
 def test_invalid_media_is_not_published(rp):
     """받은 파일이 영상이 아니면 실패하고 아무것도 남기지 않는다."""
     a = analyze(rp, [BROKEN])

@@ -57,6 +57,8 @@
 | POST | /api/replay/jobs/{ident}/retry | 운영 |
 | POST | /api/replay/jobs/{ident}/pause | 운영 |
 | POST | /api/replay/jobs/{ident}/resume | 운영 |
+| POST | /api/replay/jobs/remove-unfinished | 운영 |
+| DELETE | /api/replay/jobs/{ident} | 운영 |
 | GET | /api/replay/channels | 보기 |
 | GET | /api/replay/channels/{channel_id}/months | 보기 |
 | GET | /api/replay/channels/{channel_id}/videos | 보기 |

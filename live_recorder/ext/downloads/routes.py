@@ -121,6 +121,16 @@ def build(ctx: ExtensionContext) -> APIRouter:
     async def replay_cancel(ident: str):
         return await replay.require().cancel(OWNER, ident)
 
+    @r.post("/api/replay/jobs/remove-unfinished")
+    async def replay_remove_unfinished():
+        """실패·취소·중단한 작업의 내역을 모두 지운다."""
+        return replay.require().remove_unfinished(OWNER)
+
+    @r.delete("/api/replay/jobs/{ident}")
+    async def replay_remove(ident: str):
+        """실패·취소·중단한 작업 하나의 내역을 지운다."""
+        return replay.require().remove(OWNER, ident)
+
     @r.post("/api/replay/jobs/{ident}/retry")
     async def replay_retry(ident: str):
         return await replay.require().retry(OWNER, ident)

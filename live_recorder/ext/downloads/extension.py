@@ -101,7 +101,8 @@ class DownloadsExtension(Extension):
         ("GET", "/api/replay/jobs/{ident}/file"))) + tuple(AccessRule(m, p, LOGIN, KEY_OPERATE) for m, p in (
         ("PUT", "/api/replay/control"), ("POST", "/api/replay/cancel-active"), ("POST", "/api/replay/analyze"),
         ("POST", "/api/replay/jobs"), ("POST", "/api/replay/jobs/{ident}/cancel"), ("POST", "/api/replay/jobs/{ident}/retry"),
-        ("POST", "/api/replay/jobs/{ident}/pause"), ("POST", "/api/replay/jobs/{ident}/resume"))) + (
+        ("POST", "/api/replay/jobs/{ident}/pause"), ("POST", "/api/replay/jobs/{ident}/resume"),
+        ("POST", "/api/replay/jobs/remove-unfinished"), ("DELETE", "/api/replay/jobs/{ident}"))) + (
         # 채널 다시보기 목록(공급자는 확장이 등록한다). 수집 목록은 보기, 수집 시작·채널 등록·고른 영상 받기는 운영
         AccessRule("GET", "/api/replay/channels", LOGIN, KEY_VIEW),
         AccessRule("GET", "/api/replay/channels/{channel_id}/months", LOGIN, KEY_VIEW),

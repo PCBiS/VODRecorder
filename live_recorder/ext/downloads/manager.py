@@ -61,6 +61,8 @@ def clean_text(value, length=500):
 
 
 ACTIVE = ('queued', 'running', 'finalizing', 'cancelling', 'paused')
+UNFINISHED = ('failed', 'cancelled', 'interrupted')  # 끝났지만 받지 못한 작업. 내역을 지울 수 있다
+UNFINISHED_KEEP = timedelta(days=7)  # 이만큼 지난 실패·취소·중단 내역은 스스로 정리한다
 MAX_SELECT = 30
 # 작업 목록 상태 필터. 확인 필요가 기본이고 완료는 완료 필터에서만 보인다. 일시정지는 확인 필요·진행에 든다
 JOB_FILTERS = {'attention': ('queued', 'running', 'finalizing', 'cancelling', 'paused', 'failed', 'interrupted'),
@@ -516,22 +518,29 @@ class ReplayManager:
                 event.set()
 
     def prune_completed(self, current_time=None):
-        """완료된 작업의 내역은 1시간 뒤 정리한다. 영상 파일은 남긴다."""
-        cutoff = (current_time or datetime.now(timezone.utc)) - timedelta(hours=1)
-        with self.db:
-            expired = set()
-            for row in self.db.execute("SELECT id,payload FROM records WHERE kind='job' AND status='completed'").fetchall():
-                job = json.loads(row['payload'])
-                try:
-                    completed = datetime.fromisoformat(job.get('completed_at') or job['updated_at'])
-                    if completed.tzinfo is None:
-                        continue
-                except (KeyError, TypeError, ValueError):
+        """완료된 작업의 내역은 1시간 뒤 정리한다. 영상 파일은 남긴다.
+        실패·취소·중단한 작업의 내역은 7일 뒤 정리한다(그 전에는 재시도하거나 직접 지울 수 있다)."""
+        current = current_time or datetime.now(timezone.utc)
+        expired = set()
+        rows = self.db.execute("SELECT id,status,payload FROM records WHERE kind='job' AND status IN ('completed','failed','cancelled','interrupted')").fetchall()
+        for row in rows:
+            job = json.loads(row['payload'])
+            done = row['status'] == 'completed'
+            try:
+                ended = datetime.fromisoformat((job.get('completed_at') if done else None) or job['updated_at'])
+                if ended.tzinfo is None:
                     continue
-                if completed <= cutoff and row['id'] not in self.done:
-                    expired.add(row['id'])
-            if not expired:
-                return
+            except (KeyError, TypeError, ValueError):
+                continue
+            if ended <= current - (timedelta(hours=1) if done else UNFINISHED_KEEP) and row['id'] not in self.done:
+                expired.add(row['id'])
+        self._forget(expired)
+
+    def _forget(self, expired):
+        """작업 내역(기록·로그·요청 열쇠)을 지운다. 받은 영상 파일과 받은 영상 기억은 건드리지 않는다."""
+        if not expired:
+            return
+        with self.db:
             for row in self.db.execute('SELECT owner,key,ids FROM requests').fetchall():
                 ids = json.loads(row['ids'])
                 retained = [ident for ident in ids if ident not in expired]
@@ -740,6 +749,28 @@ class ReplayManager:
             except asyncio.TimeoutError:
                 pass
         return self.get_job(owner, ident)
+
+    def remove(self, owner, ident):
+        """실패·취소·중단한 작업 하나의 내역을 지운다. 남은 작업 폴더가 있으면 함께 지운다."""
+        self._available()
+        job = self._get('job', owner, ident)
+        if job['status'] not in UNFINISHED:
+            raise ReplayError(409, '실패·취소·중단한 작업만 지울 수 있습니다.')
+        if ident in self.done:
+            raise ReplayError(409, '이전 시도를 정리하고 있습니다.')
+        self._cleanup(self.work_root / ident)
+        self._forget({ident})
+        return {'removed': 1}
+
+    def remove_unfinished(self, owner):
+        """실패·취소·중단한 작업의 내역을 모두 지운다."""
+        self._available()
+        idents = {row['id'] for row in self.db.execute(
+            "SELECT id FROM records WHERE kind='job' AND owner=? AND status IN ('failed','cancelled','interrupted')", (owner,))} - set(self.done)
+        for ident in idents:
+            self._cleanup(self.work_root / ident)
+        self._forget(idents)
+        return {'removed': len(idents)}
 
     async def retry(self, owner, ident):
         """같은 작업을 다시 시도한다. 시도 횟수가 늘어난다."""

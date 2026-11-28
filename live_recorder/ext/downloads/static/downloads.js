@@ -162,6 +162,12 @@ async function enqueueSelected() {
   if (res) loadJobs();
 }
 
+async function removeUnfinishedJobs() {
+  if (!confirm("실패·취소·중단한 작업의 내역을 모두 지울까요? 받은 영상 파일은 그대로 둡니다.")) return;
+  const res = await act(() => api("POST", "/api/replay/jobs/remove-unfinished"), (r) => `${r.removed}개의 내역을 지웠습니다`);
+  if (res) loadJobs();
+}
+
 async function cancelAllJobs() {
   const st = await act(() => api("GET", "/api/replay/status"));
   if (!st || !st.active) { toast("대기·진행 중인 작업이 없습니다"); return; }
@@ -215,6 +221,10 @@ function jobRow(job) {
     actions.append(el("button", { class: "btn small", text: "재시도", dataset: { action: "retry" },
       onclick: () => act(() => api("POST", `/api/replay/jobs/${job.id}/retry`), "다시 대기열에 넣었습니다").then(loadJobs) }));
   }
+  if (["failed", "cancelled", "interrupted"].includes(job.status)) {
+    actions.append(el("button", { class: "btn small ghost", text: "지우기", dataset: { action: "remove" },
+      onclick: () => act(() => api("DELETE", `/api/replay/jobs/${job.id}`), "내역을 지웠습니다").then(loadJobs) }));
+  }
   if (job.can_download) actions.append(el("a", { class: "btn small", href: `/api/replay/jobs/${job.id}/file`, text: "내려받기" }));
   actions.append(el("button", { class: "btn small ghost", text: "로그", onclick: () => showLog(job) }));
   return el("tr", { dataset: { job: job.id, status: job.status } },
@@ -231,6 +241,7 @@ async function loadJobs() {
   if (!data) return;
   for (const span of document.querySelectorAll("[data-count]")) span.textContent = `(${data.counts[span.dataset.count] || 0})`;
   $("jobs-cancel-all").disabled = !data.counts.active; // 취소할 대기·진행 작업이 없으면 누를 수 없다
+  $("jobs-remove-unfinished").disabled = !data.counts.failed;
   $("jobs-body").replaceChildren(...(data.jobs.length ? data.jobs.map(jobRow)
     : [el("tr", {}, el("td", { colspan: "5", class: "muted", text: "작업이 없습니다." }))]));
   if (openLog) showLog(data.jobs.find((j) => j.id === openLog) || null, true);
@@ -288,6 +299,7 @@ async function bindDownloads() {
   $("analyze-form").addEventListener("submit", runAnalysis);
   $("enqueue").addEventListener("click", enqueueSelected);
   $("jobs-cancel-all").addEventListener("click", cancelAllJobs);
+  $("jobs-remove-unfinished").addEventListener("click", removeUnfinishedJobs);
   $("replay-pause-all").addEventListener("click", togglePauseAll);
   for (const btn of document.querySelectorAll("[data-filter]")) {
     btn.addEventListener("click", () => {
